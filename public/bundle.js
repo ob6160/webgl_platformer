@@ -6,12 +6,15 @@ var vec3 = require('gl-matrix').vec3;
 
 var sprite = require("./sprite.js");
 var renderable = require("./renderable.js");
+var level = require("./level.js");
 
 var gl = null;
 var program = null;
 var test_quad = null;
 var other_test_quad = null;
 var textures = null;
+
+var gameLevel = new level(1000, 20, 32, 32);
 
 var camera = {
     viewMat: mat4.create()
@@ -22,13 +25,12 @@ var test_renderable = null;
 
 function init() {
     gl = twgl.getWebGLContext(document.getElementById("c"));
-    program_sprite = twgl.createProgramInfo(gl, ["vs", "fs"]);
+    program_sprite = twgl.createProgramInfo(gl, ["vs-sprite", "fs-sprite"]);
+    program_map = twgl.createProgramInfo(gl, ["vs-map", "fs-map"]);
 
 
     gl.canvas.width = 800;
     gl.canvas.height = 600;
-
-
 
     textures = twgl.createTextures(gl, {
         tilesheet: {
@@ -37,17 +39,26 @@ function init() {
         }
     });
 
-
-
     mat4.ortho(camera.viewMat, 0.0, gl.canvas.width, gl.canvas.height, 0.0, 0.0, -100);
 
-
+    //Init sprites
     gl.useProgram(program_sprite.program);
-    var uProjMat = gl.getUniformLocation(program_sprite.program, 'u_projMat');
-    gl.uniformMatrix4fv(uProjMat, false, camera.viewMat);
+    var u_projection = gl.getUniformLocation(program_sprite.program, 'u_projection');
+    gl.uniformMatrix4fv(u_projection, false, camera.viewMat);
+    test_quad = new sprite(gl, program_sprite, program_sprite.program, textures.tilesheet);
 
-    test_quad = new sprite(gl, program_sprite.program, textures.tilesheet);
+    //Init map
+    gl.useProgram(program_map.program);
+    var u_projection = gl.getUniformLocation(program_map.program, 'u_projection');
+    gl.uniformMatrix4fv(u_projection, false, camera.viewMat);
+
+    test_renderable = new renderable(gl, program_map, program_map.program, textures.tilesheet);
+    gameLevel.bindRenderable(test_renderable);
     
+    test_renderable.addQuad(0,0,100,100,1,0);
+    
+    test_renderable.initBuffers();
+
     requestAnimationFrame(gameLoop);
 }
 
@@ -63,15 +74,15 @@ function render() {
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     // gl.enable(gl.DEPTH_TEST);
-    // gl.disable(gl.BLEND);
+    // gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
 
     gl.useProgram(program_sprite.program);
+    test_quad.render(gl, program_sprite);
 
-    test_quad.applyUniforms(gl, program_sprite.program);
-    test_quad.render(gl, program_sprite.program);
-
+    // gl.useProgram(program_map.program);
+    // test_renderable.render();
 
 };
 
@@ -79,171 +90,182 @@ var poo = 0;
 
 function update() {
     poo += 10;
-    mat4.translate(test_quad.translationMatrix, mat4.create(), [poo / 10, Math.sin(poo / 100) * 10 + 100, 0.0]);
+
+    //mat4.translate(test_renderable.translationMatrix, mat4.create(), [poo / 10, Math.sin(poo / 100) * 10 + 100, 0.0]);
+    mat4.translate(test_quad.translationMatrix, mat4.create(), [poo / 10, Math.cos(poo / 100) * 10 + 100, 0.0]);
     mat4.scale(test_quad.translationMatrix, test_quad.translationMatrix, [4, 4, 0]);
-    // mat4.rotateX(test_quad.translationMatrix, mat4.create(), poo);
-    //  mat4.rotateY(test_quad.translationMatrix, test_quad.translationMatrix, poo / 500);
-    // mat4.rotateX(test_quad.translationMatrix, test_quad.translationMatrix, poo / 600);
-    // mat4.rotateZ(test_quad.translationMatrix, test_quad.translationMatrix, 1);
 };
 
 module.exports.init = init;
-
-
-
-// // var arrays = {
-// //     position: [-1, -1, 0, 1, -1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1, 1, 0]
-// // };
-
-// // var bufferInfo = twgl.createBufferInfoFromArrays(gl, arrays);
-
-// function render(time) {
-
-
-//     var uniforms = {
-//         time: time * 0.001,
-//         resolution: [gl.canvas.width, gl.canvas.height],
-//     };
-
-
-//     twgl.setBuffersAndAttributes(gl, programInfo, bufferInfo);
-//     twgl.setUniforms(programInfo, uniforms);
-//     twgl.drawBufferInfo(gl, gl.TRIANGLE_STRIP, bufferInfo);
-
-//     requestAnimationFrame(render);
-// }
-// requestAnimationFrame(render);
-},{"./renderable.js":3,"./sprite.js":4,"gl-matrix":5}],2:[function(require,module,exports){
-var game = require("./game.js");
-
-game.init();
-},{"./game.js":1}],3:[function(require,module,exports){
-// var twgl = window.twgl;
-// var mat4 = require('gl-matrix').mat4;
-// var vec3 = require('gl-matrix').vec3;
-
-// function Renderable(gl, program, tex) {
-//     this.vertices = [];
-//     this.floatVertices = null;
-//     this.offset = 0;
-//     this.translationMatrix = mat4.create();
-//     this.texture = tex;
-
-
-//     this.FSIZE = this.vertices.BYTES_PER_ELEMENT
-//     this.initUniforms(gl, program)
-// };
-
-// Renderable.prototype.addQuad = function(x, y, w, h, u, v) {
-//     var x1 = x;
-//     var x2 = x + w;
-//     var y1 = y;
-//     var y2 = y + h;
-//     var n = 4;
-//     var base_quad = [
-//         x, y, 0, 1,
-//         x + w, y, 1, 1,
-//         x + w, y + h, 1, 0,
-//         x, y, 0, 1,
-//         x + w, y + h, 1, 0,
-//         x, y + h, 0, 0
-//     ];
-
-//     for (var i = 0; i < base_quad.length; i++) {
-//         this.vertices.push(base_quad[i]);
-//     };
-
-//     this.offset++;
-// };
-
-// Renderable.prototype.initUniforms = function(gl, program) {
-//     this.translationMatrix = mat4.create();
-//     var uTransformMatrix = gl.getUniformLocation(program, 'u_TransformMatrixRend');
-//     gl.uniformMatrix4fv(uTransformMatrix, false, this.translationMatrix);
-
-//     return this.translationMatrix;
-// };
-
-// Renderable.prototype.applyUniforms = function(gl, program) {
-//     var uTransformMatrix = gl.getUniformLocation(program, 'u_TransformMatrixRend');
-//     gl.uniformMatrix4fv(uTransformMatrix, false, this.translationMatrix);
-
-    
-//     var aPosition = gl.getAttribLocation(program, 'a_Pos');
-//     gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 4 * this.FSIZE, 0);
-//     gl.enableVertexAttribArray(aPosition);
-
-
-//     var aTexCoord = gl.getAttribLocation(program, 'a_Tex');
-//     gl.vertexAttribPointer(aTexCoord, 2, gl.FLOAT, false, 4 * this.FSIZE, 2 * this.FSIZE);
-//     gl.enableVertexAttribArray(aTexCoord);
-
-
-
-   
-// };
-
-// Renderable.prototype.normalizeUniforms = function(gl, program) {
-//     var uTransformMatrix = gl.getUniformLocation(program, 'u_TransformMatrixRend');
-//     gl.uniformMatrix4fv(uTransformMatrix, false, mat4.create());
-// };
-
-// Renderable.prototype.render = function(gl, program) {
-
-//     this.bind(gl);
-//     this.applyUniforms(gl, program);
-
-
-//     twgl.setUniforms(program, {
-//         tex: this.texture
-//     });
-
-//     gl.drawArrays(gl.TRIANGLES, 0, 6 * this.offset);
-//     this.normalizeUniforms(gl, program);
-
-// };
-
-// Renderable.prototype.bind = function(gl) {
-//     gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-// };
-
-// Renderable.prototype.complete = function(gl, program) {
-//     this.floatVertices = new Float32Array(this.vertices);
-
-//     this.initBuffers(gl, program);
-// };
-
-// Renderable.prototype.initBuffers = function(gl, program) {
-//     var vertices = this.floatVertices
-
-//     this.vertexBuffer = gl.createBuffer()
-//     gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer)
-//     gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW)
-
-//     var FSIZE = vertices.BYTES_PER_ELEMENT
-
-//     var aPosition = gl.getAttribLocation(program, 'a_Pos');
-//     gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 4 * FSIZE, 0);
-//     gl.enableVertexAttribArray(aPosition);
-
-
-//     var aTexCoord = gl.getAttribLocation(program, 'a_Tex');
-//     gl.vertexAttribPointer(aTexCoord, 2, gl.FLOAT, false, 4 * FSIZE, 2 * FSIZE);
-//     gl.enableVertexAttribArray(aTexCoord);
-
-
-
-
-// };
-
-// module.exports = Renderable;
-},{}],4:[function(require,module,exports){
+},{"./level.js":2,"./renderable.js":4,"./sprite.js":5,"gl-matrix":6}],2:[function(require,module,exports){
 var twgl = window.twgl;
 
 var mat4 = require('gl-matrix').mat4;
 var vec3 = require('gl-matrix').vec3;
 
-function Sprite(gl, program, tex) {
+
+var renderable = require("./renderable.js");
+
+function Level(w, h, tW, tH) {
+    this.map = [];
+    this.width = w;
+    this.height = h;
+    
+    this.tileW = tW;
+    this.tileH = tH;
+
+    this.renderable = null;
+
+    this.data = {
+        vertices: new Float32Array()
+    }
+};
+
+Level.prototype.generate = function() {
+    for (var x = 0; x < this.width; x++) {
+        this.map[x] = [];
+        for (var y = 0; y < this.height; y++) {
+            this.map[y][x] = 0;
+            this.data["vertices"][x * width + y] = 0;
+        }
+    }
+};
+
+Level.prototype.bindRenderable = function(renderable) {
+	this.renderable = renderable;
+
+};
+
+
+module.exports = Level;
+},{"./renderable.js":4,"gl-matrix":6}],3:[function(require,module,exports){
+var game = require("./game.js");
+
+game.init();
+},{"./game.js":1}],4:[function(require,module,exports){
+var twgl = window.twgl;
+var mat4 = require('gl-matrix').mat4;
+var vec3 = require('gl-matrix').vec3;
+
+function Renderable(gl, wrapProgram, program, tex) {
+    this.vertexBuffer = null;
+    this.texture = tex;
+    this.translationMatrix = null;
+
+    this.mapDimen = 20.5;
+
+    var x = 0;
+    var y = 0;
+    var w = 100;
+    var h = 100;
+
+    this.offset = 0;
+    this.program = program;
+    this.programWrap = wrapProgram;
+    this.gl = gl;
+
+    this.attribs = {
+        vertices: [],
+        number: 6,
+        a_position: gl.getAttribLocation(this.program, 'a_position'),
+        a_tilepos: gl.getAttribLocation(this.program, 'a_tilepos'),
+        a_texcoord: gl.getAttribLocation(this.program, 'a_texcoord')
+    }
+
+    this.x = 0;
+    this.y = 0;
+
+    this.FSIZE = new Float32Array().BYTES_PER_ELEMENT;
+
+    this.initUniforms();
+};
+
+Renderable.prototype.addQuad = function(x, y, w, h, u, v) {
+    var x1 = x;
+    var x2 = x + w;
+    var y1 = y;
+    var y2 = y + h;
+
+    var base_quad = [
+        x, y, 0, -1, u, v,
+        x + w, y, 1, -1, u, v,
+        x + w, y + h, 1, 0, u, v,
+        x, y, 0, -1, u, v,
+        x + w, y + h, 1, 0, u, v,
+        x, y + h, 0, 0, u, v
+    ];
+
+    for (var i = 0; i < base_quad.length; i++) {
+        this.attribs.vertices.push(base_quad[i]);
+    };
+
+    this.offset++;
+
+};
+
+Renderable.prototype.bind = function() {
+    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vertexBuffer)
+};
+
+Renderable.prototype.render = function() {
+    var gl = this.gl;
+
+    //Bind buffer;
+    this.bind(gl);
+
+    //Set uniforms
+    twgl.setUniforms(this.programWrap, {
+        tex: this.texture,
+        u_transform: this.translationMatrix,
+        u_mapdimen: this.mapDimen
+    });
+
+    //Set attributes
+    gl.vertexAttribPointer(this.attribs.a_position, 2, gl.FLOAT, false, 6 * this.FSIZE, 0);
+    gl.enableVertexAttribArray(this.attribs.a_position);
+
+    gl.vertexAttribPointer(this.attribs.a_texcoord, 2, gl.FLOAT, false, 6 * this.FSIZE, 2 * this.FSIZE);
+    gl.enableVertexAttribArray(this.attribs.a_texcoord);
+
+    gl.vertexAttribPointer(this.attribs.a_tilepos, 2, gl.FLOAT, false, 6 * this.FSIZE, 4 * this.FSIZE);
+    gl.enableVertexAttribArray(this.attribs.a_tilepos);
+
+    //Render
+    gl.drawArrays(gl.TRIANGLES, 0, this.attribs["number"] * this.offset);
+};
+
+Renderable.prototype.initUniforms = function() {
+    this.translationMatrix = mat4.create();
+    twgl.setUniforms(this.programWrap, {
+        tex: this.texture,
+        u_transform: this.translationMatrix
+    });
+};
+
+
+
+Renderable.prototype.initBuffers = function() {
+    var vertices = new Float32Array(this.attribs["vertices"]);
+    var gl = this.gl;
+
+    this.vertexBuffer = gl.createBuffer()
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW)
+
+};
+
+
+module.exports = Renderable;
+},{"gl-matrix":6}],5:[function(require,module,exports){
+var twgl = window.twgl;
+
+var mat4 = require('gl-matrix').mat4;
+var vec3 = require('gl-matrix').vec3;
+
+
+
+function Sprite(gl, wrapProgram, program, tex) {
     this.vertexBuffer = null;
     this.texture = tex;
     this.translationMatrix = null;
@@ -251,98 +273,92 @@ function Sprite(gl, program, tex) {
     var y = 0;
     var w = 100;
     var h = 100;
+
+    this.program = program;
+    this.programWrap = wrapProgram;
+    this.gl = gl;
+
     this.attribs = {
         vertices: new Float32Array([
-            x, y, 0, 1,
-            x + w, y, 1, 1,
+            x, y, 0, -1,
+            x + w, y, 1, -1,
             x + w, y + h, 1, 0,
-            x, y, 0, 1,
+            x, y, 0, -1,
             x + w, y + h, 1, 0,
             x, y + h, 0, 0
         ]),
-        number: 6
+        number: 6,
+        a_position: gl.getAttribLocation(this.program, 'a_position'),
+        a_texcoord: gl.getAttribLocation(this.program, 'a_texcoord')
     }
+
     this.x = 0;
     this.y = 0;
-    this.FSIZE = this.attribs.vertices.BYTES_PER_ELEMENT
+
+    this.FSIZE = this.attribs.vertices.BYTES_PER_ELEMENT;
+
     //Setup
-    this.initBuffers(gl, program);
-    this.initUniforms(gl, program);
+    this.initBuffers();
+    this.initUniforms();
 };
 
-Sprite.prototype.bind = function(gl) {
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer)
-};
-
-Sprite.prototype.update = function(gl) {
+Sprite.prototype.update = function() {
 
 };
 
-Sprite.prototype.render = function(gl, program) {
+Sprite.prototype.bind = function() {
+    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vertexBuffer)
+};
+
+Sprite.prototype.render = function() {
+    var gl = this.gl;
+
+    //Bind buffer;
     this.bind(gl);
-    var uTransformMatrix = gl.getUniformLocation(program, 'u_TransformMatrix');
-    gl.uniformMatrix4fv(uTransformMatrix, false, this.translationMatrix);
 
-    twgl.setUniforms(program, {
-        tex: this.texture
+    //Set uniforms
+    twgl.setUniforms(this.programWrap, {
+        tex: this.texture,
+        u_transform: this.translationMatrix
     });
 
+    //Set attributes
+    gl.vertexAttribPointer(this.attribs.a_position, 2, gl.FLOAT, false, 4 * this.FSIZE, 0);
+    gl.enableVertexAttribArray(this.attribs.a_position);
+
+    gl.vertexAttribPointer(this.attribs.a_texcoord, 2, gl.FLOAT, false, 4 * this.FSIZE, 2 * this.FSIZE);
+    gl.enableVertexAttribArray(this.attribs.a_texcoord);
+
+    //Render
     gl.drawArrays(gl.TRIANGLES, 0, this.attribs["number"]);
-
-    gl.uniformMatrix4fv(uTransformMatrix, false, mat4.create());
-
 };
 
-Sprite.prototype.initUniforms = function(gl, program) {
+Sprite.prototype.initUniforms = function() {
     this.translationMatrix = mat4.create();
-    var uTransformMatrix = gl.getUniformLocation(program, 'u_TransformMatrix');
-    gl.uniformMatrix4fv(uTransformMatrix, false, this.translationMatrix);
-
-    return this.translationMatrix;
+    twgl.setUniforms(this.programWrap, {
+        tex: this.texture,
+        u_transform: this.translationMatrix
+    });
 };
 
-Sprite.prototype.applyUniforms = function(gl, program) {
-    var uTransformMatrix = gl.getUniformLocation(program, 'u_TransformMatrix');
-    gl.uniformMatrix4fv(uTransformMatrix, false, this.translationMatrix);
+Sprite.prototype.dropAttribArrays = function(arrays) {
 
-    var aPosition = gl.getAttribLocation(program, 'a_PositionSprite');
-    gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 4 * this.FSIZE, 0);
-    gl.enableVertexAttribArray(aPosition);
-
-    var aTexCoord = gl.getAttribLocation(program, 'a_TextureCoordinate');
-    gl.vertexAttribPointer(aTexCoord, 2, gl.FLOAT, false, 4 * this.FSIZE, 2 * this.FSIZE);
-    gl.enableVertexAttribArray(aTexCoord);
 };
 
-Sprite.prototype.initBuffers = function(gl, program) {
+Sprite.prototype.initBuffers = function() {
     var vertices = this.attribs["vertices"];
-
+    var gl = this.gl;
+    
     this.vertexBuffer = gl.createBuffer()
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer)
+    
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW)
-
-    var FSIZE = vertices.BYTES_PER_ELEMENT
-
-    // vertexAttrPointer params
-    // - location
-    // - size of each component
-    // - normalized (true to normalize to (0, 1))
-    // - stride (number of bytes between different vertex data)
-    // - offset (the offset in bytes from where to start reading
-    var aPosition = gl.getAttribLocation(program, 'a_PositionSprite');
-    gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 4 * FSIZE, 0);
-    gl.enableVertexAttribArray(aPosition);
-
-    var aTexCoord = gl.getAttribLocation(program, 'a_TextureCoordinate');
-    gl.vertexAttribPointer(aTexCoord, 2, gl.FLOAT, false, 4 * FSIZE, 2 * FSIZE);
-    gl.enableVertexAttribArray(aTexCoord);
-
 
 };
 
 
 module.exports = Sprite;
-},{"gl-matrix":5}],5:[function(require,module,exports){
+},{"gl-matrix":6}],6:[function(require,module,exports){
 /**
  * @fileoverview gl-matrix - High performance matrix and vector operations
  * @author Brandon Jones
@@ -380,7 +396,7 @@ exports.quat = require("./gl-matrix/quat.js");
 exports.vec2 = require("./gl-matrix/vec2.js");
 exports.vec3 = require("./gl-matrix/vec3.js");
 exports.vec4 = require("./gl-matrix/vec4.js");
-},{"./gl-matrix/common.js":6,"./gl-matrix/mat2.js":7,"./gl-matrix/mat2d.js":8,"./gl-matrix/mat3.js":9,"./gl-matrix/mat4.js":10,"./gl-matrix/quat.js":11,"./gl-matrix/vec2.js":12,"./gl-matrix/vec3.js":13,"./gl-matrix/vec4.js":14}],6:[function(require,module,exports){
+},{"./gl-matrix/common.js":7,"./gl-matrix/mat2.js":8,"./gl-matrix/mat2d.js":9,"./gl-matrix/mat3.js":10,"./gl-matrix/mat4.js":11,"./gl-matrix/quat.js":12,"./gl-matrix/vec2.js":13,"./gl-matrix/vec3.js":14,"./gl-matrix/vec4.js":15}],7:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -434,7 +450,7 @@ glMatrix.toRadian = function(a){
 
 module.exports = glMatrix;
 
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -738,7 +754,7 @@ mat2.LDU = function (L, D, U, a) {
 
 module.exports = mat2;
 
-},{"./common.js":6}],8:[function(require,module,exports){
+},{"./common.js":7}],9:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -1057,7 +1073,7 @@ mat2d.frob = function (a) {
 
 module.exports = mat2d;
 
-},{"./common.js":6}],9:[function(require,module,exports){
+},{"./common.js":7}],10:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -1624,7 +1640,7 @@ mat3.frob = function (a) {
 
 module.exports = mat3;
 
-},{"./common.js":6}],10:[function(require,module,exports){
+},{"./common.js":7}],11:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -2909,7 +2925,7 @@ mat4.frob = function (a) {
 
 module.exports = mat4;
 
-},{"./common.js":6}],11:[function(require,module,exports){
+},{"./common.js":7}],12:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -3464,7 +3480,7 @@ quat.str = function (a) {
 
 module.exports = quat;
 
-},{"./common.js":6,"./mat3.js":9,"./vec3.js":13,"./vec4.js":14}],12:[function(require,module,exports){
+},{"./common.js":7,"./mat3.js":10,"./vec3.js":14,"./vec4.js":15}],13:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -3989,7 +4005,7 @@ vec2.str = function (a) {
 
 module.exports = vec2;
 
-},{"./common.js":6}],13:[function(require,module,exports){
+},{"./common.js":7}],14:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -4700,7 +4716,7 @@ vec3.str = function (a) {
 
 module.exports = vec3;
 
-},{"./common.js":6}],14:[function(require,module,exports){
+},{"./common.js":7}],15:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -5239,4 +5255,4 @@ vec4.str = function (a) {
 
 module.exports = vec4;
 
-},{"./common.js":6}]},{},[2]);
+},{"./common.js":7}]},{},[3]);

@@ -5,34 +5,75 @@
 	<body>
 		<canvas id="c"></canvas>
 
+		<script id="vs-map" type="notjs">
+			attribute vec4 a_position;
+			attribute vec2 a_texcoord;
+			attribute vec2 a_tilepos;
 
+			uniform mat4 u_projection;
 
-		<script id="vs" type="notjs">
-			attribute vec4 a_PositionSprite;
-			attribute vec2 a_TextureCoordinate;
-
-			uniform mat4 u_projMat;
-
-			uniform mat4 u_TransformMatrix;
-			varying vec2 v_TextureCoordinate;
+			uniform mat4 u_transform;
+			varying vec2 v_texcoord;
+			varying vec2 v_tilepos;
 			void main() {
-				gl_Position = u_projMat * u_TransformMatrix * a_PositionSprite;
-				v_TextureCoordinate = a_TextureCoordinate;
+				gl_Position = u_projection * u_transform * a_position;
+				v_texcoord = a_texcoord;
+				v_tilepos = a_tilepos;
 
 			}
 		</script>
-		<script id="fs" type="notjs">
+		<script id="fs-map" type="notjs">
 			precision mediump float;
 
-			uniform vec2 resolution;
-			uniform float time;
-			uniform sampler2D u_tilesheet;
-			varying vec2 v_TextureCoordinate;
+			uniform sampler2D tex;
+			uniform float u_mapdimen;
+			
+			varying vec2 v_tilepos;
+			varying vec2 v_texcoord;
+
+			float scaleX = 1.0 / u_mapdimen;
+			float scaleY = 1.0 / u_mapdimen;
 
 			void main() {
-				vec4 img = texture2D(u_tilesheet, v_TextureCoordinate);
-				vec2 uv = gl_FragCoord.xy / resolution;
+				//vec4 img = texture2D(tex, v_texcoord);
+				float y = v_tilepos.y + 1.0;
 				
+
+				vec4 img = texture2D(tex, vec2((v_texcoord.x + v_tilepos.x) * scaleX,  (v_texcoord.y * scaleY) + y * scaleY));
+				if(img.a < 0.1) {
+					discard;
+				}
+
+				gl_FragColor = img;
+			}
+		</script>
+
+
+		<script id="vs-sprite" type="notjs">
+			attribute vec4 a_position;
+			attribute vec2 a_texcoord;
+
+			uniform mat4 u_projection;
+
+			uniform mat4 u_transform;
+			varying vec2 v_texcoord;
+			void main() {
+				gl_Position = u_projection * u_transform * a_position;
+				v_texcoord = a_texcoord;
+
+			}
+		</script>
+		<script id="fs-sprite" type="notjs">
+			precision mediump float;
+
+			uniform sampler2D tex;
+			
+			varying vec2 v_texcoord;
+
+
+			void main() {
+				vec4 img = texture2D(tex, v_texcoord);
+		
 				if(img.a < 0.1) {
 					discard;
 				}
