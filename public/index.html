@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+	<head>
+	</head>
+	<body>
+		<canvas id="c"></canvas>
+
+
+
+		<script id="vs" type="notjs">
+			attribute vec4 a_PositionSprite;
+			attribute vec2 a_TextureCoordinate;
+
+			uniform mat4 u_projMat;
+
+			uniform mat4 u_TransformMatrix;
+			varying vec2 v_TextureCoordinate;
+			void main() {
+				gl_Position = u_projMat * u_TransformMatrix * a_PositionSprite;
+				v_TextureCoordinate = a_TextureCoordinate;
+
+			}
+		</script>
+		<script id="fs" type="notjs">
+			precision mediump float;
+
+			uniform vec2 resolution;
+			uniform float time;
+			uniform sampler2D u_tilesheet;
+			varying vec2 v_TextureCoordinate;
+
+			void main() {
+				vec4 img = texture2D(u_tilesheet, v_TextureCoordinate);
+				vec2 uv = gl_FragCoord.xy / resolution;
+				
+				if(img.a < 0.1) {
+					discard;
+				}
+
+				gl_FragColor = img;
+			}
+		</script>
+		<script src="twgl-full.js"></script>
+		<script src="bundle.js"></script>
+	</body>
+</html>
