@@ -13,7 +13,7 @@ var player = require("./player.js");
 var gl = null;
 var textures = null;
 
-var gameLevel = new level(500, 50, 64, 64);
+var gameLevel = new level(20, 20, 64, 64);
 var gamePlayer = null;
 
 var projectionMatrix = mat4.create();
@@ -41,7 +41,7 @@ function init() {
     prepareUniform(program_sprite, program_map);
 
 
-    gamePlayer = new player(new vec2(1.0, 1.0));
+    gamePlayer = new player(new vec2(300.0, 0.0));
     gamePlayer.bindRenderable(new renderable(gl, program_map, program_map.program, textures.player));
 
 
@@ -120,7 +120,9 @@ function gameLoop() {
     last = now;
 
     requestAnimationFrame(gameLoop);
+    //setTimeout(gameLoop, 1);
 }
+
 
 
 function render(dt) {
@@ -143,8 +145,8 @@ var poo = 0;
 function update(dt) {
     poo += 1;
 
-    gamePlayer.move(dt, currentlyPressed, gameLevel);
-    mat4.translate(gameLevel.renderable.translationMatrix, mat4.create(), [0, 0, 0.0]);
+    gamePlayer.update(dt, currentlyPressed, gameLevel);
+    
     //mat4.translate(gamePlayer.renderable.translationMatrix, mat4.create(), [0, -350, 0.0]);
     
     //mat4.rotateZ(gameLevel.renderable.translationMatrix, gameLevel.renderable.translationMatrix, poo / 500);
@@ -186,7 +188,7 @@ function Level(w, h, tW, tH, program) {
 Level.prototype.generate = function() {
     var lastChoice = 0.5;
 
-    var levelProportion = this.height * 0.15;
+    var levelProportion = this.height * 0.4;
     for (var x = 0; x < this.width; x++) {
         this.map[x] = [];
         for (var y = 0; y < this.height; y++) {
@@ -194,7 +196,7 @@ Level.prototype.generate = function() {
             	if(y > levelProportion && y <= levelProportion + 1) {
             		this.map[x][y] = 1;
             	} else {
-            		this.map[x][y] = 0;	
+            		this.map[x][y] = 3;	
             	}
             } else {
             	this.map[x][y] = -1;
@@ -202,6 +204,10 @@ Level.prototype.generate = function() {
         }
     }
 
+    this.map[2][10] = -1;
+    this.map[3][10] = -1;
+    this.map[3][9] = -1;
+    this.map[2][9] = -1;
 };
 
 Level.prototype.bindRenderable = function(renderable) {
@@ -210,10 +216,10 @@ Level.prototype.bindRenderable = function(renderable) {
     this.initRenderable();
 };
 
-Level.prototype.isBlocked = function(position, size) {
-    var xStart = Math.floor((position.x / this.tileW));
+Level.prototype.isBlocked = function(position, size, shift) {
+    var xStart = Math.floor(((position.x + shift.x) / this.tileW));
     var xEnd = Math.ceil((position.x + size.x) / this.tileW);
-    var yStart = Math.floor((position.y) / this.tileH);
+    var yStart = Math.floor((position.y + shift.y) / this.tileH);
     var yEnd = Math.ceil((position.y + size.y) / this.tileH);
 
     if (xStart < 0 || xEnd > this.width || yStart < 0)
@@ -242,10 +248,11 @@ Level.prototype.initRenderable = function() {
                 this.renderable.addQuad(i * this.tileW, j * this.tileH, this.tileW + 1, this.tileH + 1, 3, 0);
             } else if (currTile == 3) {
                 this.renderable.addQuad(i * this.tileW, j * this.tileH, this.tileW + 1, this.tileH + 1, 5, 0);
-            }
-
+            };
         };
     };
+
+
 
     this.renderable.initBuffers();
 };
@@ -270,11 +277,13 @@ var renderable = require("./renderable.js");
 var vec2 = require("./vector2d.js");
 
 function Player(position) {
-    this.position = position;
-    this.speed = new vec2(0.0, 0.0);
+    this.cameraPosition = position;
+    this.gamePosition = position.plus(new vec2(0, 0));
 
-    this.size = new vec2(128, 256);
-    this.collisionBox = new vec2(64, 256);
+    this.speed = new vec2(0.0, 0.0);
+    this.size = new vec2(96, 196);
+    this.collisionBox = new vec2(85, 196);
+    this.shift = new vec2(10,0);
 
     this.renderable = null;
 };
@@ -294,51 +303,50 @@ Player.prototype.initRenderable = function() {
     this.renderable.mapDimenY = 4;
     this.renderable.addQuad(0, 0, this.size.x, this.size.y, 0, 0);
     this.renderable.initBuffers();
+
+    mat4.translate(this.renderable.translationMatrix, mat4.create(), [this.gamePosition.x, this.gamePosition.y, 0.0]);
 };
 
-var playerXSpeed = 100;
+var playerXSpeed = 300;
 var gravity = 500;
-var jumpSpeed = 200;
+var jumpSpeed = 500;
 
 Player.prototype.moveX = function(dt, keys, level) {
     if (keys.left) this.speed.x = -playerXSpeed;
     if (keys.right) this.speed.x = playerXSpeed;
 
-    if(!keys.left && !keys.right) {
-    	this.speed.x = 0;
+    if (!keys.left && !keys.right) {
+        this.speed.x = 0;
     }
 
-    var stepped = new vec2(this.speed.x * dt, 0);
-    var newPos = this.position.plus(stepped);
+    var stepped = new vec2(Math.ceil(this.speed.x * dt), 0);
+    var newPos = this.gamePosition.plus(stepped);
 
-    var obstacle = level.isBlocked(newPos, this.collisionBox);
-
+    var obstacle = level.isBlocked(newPos, this.collisionBox, this.shift);
 
     if (obstacle > -1) {
-        // level.playerTouched(obstacle);
+
     } else {
 
-        this.position = newPos;
+        this.gamePosition = newPos;
     }
 };
 
 Player.prototype.moveY = function(dt, keys, level) {
-    this.speed.y += dt * gravity;
+    this.speed.y += Math.ceil(dt * gravity);
 
-    var stepped = new vec2(0, this.speed.y * dt);
-    var newPos = this.position.plus(stepped);
+    var stepped = new vec2(0, Math.ceil(this.speed.y * dt));
+    var newPos = this.gamePosition.plus(stepped);
 
-    var collided = level.isBlocked(newPos, this.collisionBox);
+    var collided = level.isBlocked(newPos, this.collisionBox, this.shift);
 
     if (collided > -1) {
-        // level.playerTouched(obstacle);
-
         if (keys.up && this.speed.y > 0)
             this.speed.y = -jumpSpeed;
         else
             this.speed.y = 0;
     } else {
-        this.position = newPos;
+        this.gamePosition = newPos;
     }
 
 };
@@ -346,13 +354,18 @@ Player.prototype.moveY = function(dt, keys, level) {
 Player.prototype.move = function(dt, keys, level) {
     this.moveX(dt, keys, level);
     this.moveY(dt, keys, level);
-
-    this.update(dt);
 };
 
-Player.prototype.update = function(dt) {
+Player.prototype.update = function(dt, keys, level) {
+    this.cameraPosition.x = this.gamePosition.x - 300;
+    this.cameraPosition.y = this.gamePosition.y;
 
-    mat4.translate(this.renderable.translationMatrix, mat4.create(), [this.position.x, this.position.y, 0.0]);
+    level.camera.offset.x = -this.cameraPosition.x;
+    level.camera.offset.y = -this.cameraPosition.y;
+
+    mat4.translate(level.renderable.translationMatrix, mat4.create(), [level.camera.offset.x, level.camera.offset.y, 0.0]);
+
+    this.move(dt, keys, level);
 };
 
 Player.prototype.render = function() {
