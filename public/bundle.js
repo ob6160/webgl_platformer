@@ -3,146 +3,364 @@
 var twgl = window.twgl;
 var mat4 = require('gl-matrix').mat4;
 var vec3 = require('gl-matrix').vec3;
+var vec2 = require("./vector2d.js");
 
 var sprite = require("./sprite.js");
 var renderable = require("./renderable.js");
 var level = require("./level.js");
+var player = require("./player.js");
 
 var gl = null;
-var program = null;
-var test_quad = null;
-var other_test_quad = null;
 var textures = null;
 
-var gameLevel = new level(1000, 20, 32, 32);
+var gameLevel = new level(500, 50, 64, 64);
+var gamePlayer = null;
 
-var camera = {
-    viewMat: mat4.create()
-};
+var projectionMatrix = mat4.create();
 
-var test_quad = null;
+var test_sprite = null;
 var test_renderable = null;
 
+
+var arrowCodes = {37: "left", 38: "up", 39: "right"};
+var currentlyPressed = null;
+
 function init() {
+    currentlyPressed = trackKeys(arrowCodes);
+
     gl = twgl.getWebGLContext(document.getElementById("c"));
-    program_sprite = twgl.createProgramInfo(gl, ["vs-sprite", "fs-sprite"]);
-    program_map = twgl.createProgramInfo(gl, ["vs-map", "fs-map"]);
-
-
     gl.canvas.width = 800;
     gl.canvas.height = 600;
 
+    var program_sprite = twgl.createProgramInfo(gl, ["vs-sprite", "fs-sprite"]);
+    var program_map = twgl.createProgramInfo(gl, ["vs-map", "fs-map"]);
+
+    loadAssets();
+
+    mat4.ortho(projectionMatrix, 0.0, gl.canvas.width, gl.canvas.height, 0.0, 0.0, -100);
+    prepareUniform(program_sprite, program_map);
+
+
+    gamePlayer = new player(new vec2(1.0, 1.0));
+    gamePlayer.bindRenderable(new renderable(gl, program_map, program_map.program, textures.player));
+
+
+    gameLevel.generate();
+    gameLevel.bindRenderable(new renderable(gl, program_map, program_map.program, textures.tilesheet));
+
+
+
+    requestAnimationFrame(gameLoop);
+};
+
+
+function trackKeys(codes) {
+  var pressed = Object.create(null);
+  function handler(event) {
+    if (codes.hasOwnProperty(event.keyCode)) {
+      var down = event.type == "keydown";
+      pressed[codes[event.keyCode]] = down;
+      event.preventDefault();
+    }
+  }
+  addEventListener("keydown", handler);
+  addEventListener("keyup", handler);
+  return pressed;
+}
+
+
+function loadAssets() {
     textures = twgl.createTextures(gl, {
         tilesheet: {
             src: "images/tilesheet.png",
             mag: gl.NEAREST
+        },
+        player: {
+            src: "images/player.png",
+            mag: gl.NEAREST
         }
     });
+}
 
-    mat4.ortho(camera.viewMat, 0.0, gl.canvas.width, gl.canvas.height, 0.0, 0.0, -100);
-
+function prepareUniform(program_sprite, program_map) {
     //Init sprites
     gl.useProgram(program_sprite.program);
     var u_projection = gl.getUniformLocation(program_sprite.program, 'u_projection');
-    gl.uniformMatrix4fv(u_projection, false, camera.viewMat);
-    test_quad = new sprite(gl, program_sprite, program_sprite.program, textures.tilesheet);
+    gl.uniformMatrix4fv(u_projection, false, projectionMatrix);
+
 
     //Init map
     gl.useProgram(program_map.program);
     var u_projection = gl.getUniformLocation(program_map.program, 'u_projection');
-    gl.uniformMatrix4fv(u_projection, false, camera.viewMat);
+    gl.uniformMatrix4fv(u_projection, false, projectionMatrix);
+}
 
-    test_renderable = new renderable(gl, program_map, program_map.program, textures.tilesheet);
-    gameLevel.bindRenderable(test_renderable);
-    
-    test_renderable.addQuad(0,0,100,100,1,0);
-    
-    test_renderable.initBuffers();
 
-    requestAnimationFrame(gameLoop);
+var fps = 60,
+    step = 1 / fps,
+    dt = 0,
+    now, last = timestamp();
+
+function timestamp() {
+    if (window.performance && window.performance.now)
+        return window.performance.now();
+    else
+        return new Date().getTime();
 }
 
 function gameLoop() {
-    update();
-    render();
+    now = timestamp();
+    dt = dt + Math.min(1, (now - last) / 1000);
+    while (dt > step) {
+        dt = dt - step;
+        update(step);
+    }
+
+    render(dt);
+    last = now;
 
     requestAnimationFrame(gameLoop);
 }
 
-function render() {
+
+function render(dt) {
     twgl.resizeCanvasToDisplaySize(gl.canvas);
+
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    gl.clearColor(0.0, 0.7, 0.8, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    // gl.enable(gl.DEPTH_TEST);
-    // gl.enable(gl.BLEND);
+    gl.enable(gl.DEPTH_TEST);
+    gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-
-    gl.useProgram(program_sprite.program);
-    test_quad.render(gl, program_sprite);
-
-    // gl.useProgram(program_map.program);
-    // test_renderable.render();
-
+    gamePlayer.render();
+    gameLevel.render();
+    
 };
 
 var poo = 0;
 
-function update() {
-    poo += 10;
+function update(dt) {
+    poo += 1;
 
-    //mat4.translate(test_renderable.translationMatrix, mat4.create(), [poo / 10, Math.sin(poo / 100) * 10 + 100, 0.0]);
-    mat4.translate(test_quad.translationMatrix, mat4.create(), [poo / 10, Math.cos(poo / 100) * 10 + 100, 0.0]);
-    mat4.scale(test_quad.translationMatrix, test_quad.translationMatrix, [4, 4, 0]);
+    gamePlayer.move(dt, currentlyPressed, gameLevel);
+    mat4.translate(gameLevel.renderable.translationMatrix, mat4.create(), [0, 0, 0.0]);
+    //mat4.translate(gamePlayer.renderable.translationMatrix, mat4.create(), [0, -350, 0.0]);
+    
+    //mat4.rotateZ(gameLevel.renderable.translationMatrix, gameLevel.renderable.translationMatrix, poo / 500);
+    // mat4.translate(test_quad.translationMatrix, mat4.create(), [poo / 10, Math.cos(poo / 100) * 10 + 100, 0.0]);
+    // mat4.scale(test_quad.translationMatrix, test_quad.translationMatrix, [4, 4, 0]);
 };
 
 module.exports.init = init;
-},{"./level.js":2,"./renderable.js":4,"./sprite.js":5,"gl-matrix":6}],2:[function(require,module,exports){
+},{"./level.js":2,"./player.js":4,"./renderable.js":5,"./sprite.js":6,"./vector2d.js":7,"gl-matrix":8}],2:[function(require,module,exports){
+var twgl = window.twgl;
+
+var mat4 = require('gl-matrix').mat4;
+var vec3 = require('gl-matrix').vec3;
+var vec2 = require("./vector2d.js");
+
+var renderable = require("./renderable.js");
+
+function Level(w, h, tW, tH, program) {
+    this.map = [];
+    this.width = w;
+    this.height = h;
+
+    this.program_level = program;
+
+    this.tileW = tW;
+    this.tileH = tH;
+
+    this.camera = {
+        offset: new vec2(0,0)
+    };
+
+    this.renderable = null;
+
+    this.data = {
+        vertices: []
+    }
+};
+
+Level.prototype.generate = function() {
+    var lastChoice = 0.5;
+
+    var levelProportion = this.height * 0.15;
+    for (var x = 0; x < this.width; x++) {
+        this.map[x] = [];
+        for (var y = 0; y < this.height; y++) {
+            if(y > levelProportion) {
+            	if(y > levelProportion && y <= levelProportion + 1) {
+            		this.map[x][y] = 1;
+            	} else {
+            		this.map[x][y] = 0;	
+            	}
+            } else {
+            	this.map[x][y] = -1;
+            }
+        }
+    }
+
+};
+
+Level.prototype.bindRenderable = function(renderable) {
+    this.renderable = renderable;
+
+    this.initRenderable();
+};
+
+Level.prototype.isBlocked = function(position, size) {
+    var xStart = Math.floor((position.x / this.tileW));
+    var xEnd = Math.ceil((position.x + size.x) / this.tileW);
+    var yStart = Math.floor((position.y) / this.tileH);
+    var yEnd = Math.ceil((position.y + size.y) / this.tileH);
+
+    if (xStart < 0 || xEnd > this.width || yStart < 0)
+        return 0;
+    for (var y = yStart; y < yEnd; y++) {
+        for (var x = xStart; x < xEnd; x++) {
+            var fieldType = this.map[x][y];
+            if (fieldType > -1) return fieldType;
+        }
+    }
+};
+
+Level.prototype.initRenderable = function() {
+    if (!this.renderable) {
+        return false;
+    }
+
+    for (var i = 0; i < this.map.length; i++) {
+        for (var j = 0; j < this.map[i].length; j++) {
+            var currTile = this.map[i][j];
+            if (currTile == 0) {
+                this.renderable.addQuad(i * this.tileW, j * this.tileH, this.tileW + 1, this.tileH + 1, 0, 0);
+            } else if (currTile == 1) {
+                this.renderable.addQuad(i * this.tileW, j * this.tileH, this.tileW + 1, this.tileH + 1, 1, 0);
+            } else if (currTile == 2) {
+                this.renderable.addQuad(i * this.tileW, j * this.tileH, this.tileW + 1, this.tileH + 1, 3, 0);
+            } else if (currTile == 3) {
+                this.renderable.addQuad(i * this.tileW, j * this.tileH, this.tileW + 1, this.tileH + 1, 5, 0);
+            }
+
+        };
+    };
+
+    this.renderable.initBuffers();
+};
+
+Level.prototype.render = function() {
+    this.renderable.render();
+};
+
+
+module.exports = Level;
+},{"./renderable.js":5,"./vector2d.js":7,"gl-matrix":8}],3:[function(require,module,exports){
+var game = require("./game.js");
+
+game.init();
+},{"./game.js":1}],4:[function(require,module,exports){
 var twgl = window.twgl;
 
 var mat4 = require('gl-matrix').mat4;
 var vec3 = require('gl-matrix').vec3;
 
-
 var renderable = require("./renderable.js");
+var vec2 = require("./vector2d.js");
 
-function Level(w, h, tW, tH) {
-    this.map = [];
-    this.width = w;
-    this.height = h;
-    
-    this.tileW = tW;
-    this.tileH = tH;
+function Player(position) {
+    this.position = position;
+    this.speed = new vec2(0.0, 0.0);
+
+    this.size = new vec2(128, 256);
+    this.collisionBox = new vec2(64, 256);
 
     this.renderable = null;
+};
 
-    this.data = {
-        vertices: new Float32Array()
+Player.prototype.bindRenderable = function(renderable) {
+    this.renderable = renderable;
+
+    this.initRenderable();
+};
+
+Player.prototype.initRenderable = function() {
+    if (!this.renderable) {
+        return false;
+    }
+
+    this.renderable.mapDimenX = 8;
+    this.renderable.mapDimenY = 4;
+    this.renderable.addQuad(0, 0, this.size.x, this.size.y, 0, 0);
+    this.renderable.initBuffers();
+};
+
+var playerXSpeed = 100;
+var gravity = 500;
+var jumpSpeed = 200;
+
+Player.prototype.moveX = function(dt, keys, level) {
+    if (keys.left) this.speed.x = -playerXSpeed;
+    if (keys.right) this.speed.x = playerXSpeed;
+
+    if(!keys.left && !keys.right) {
+    	this.speed.x = 0;
+    }
+
+    var stepped = new vec2(this.speed.x * dt, 0);
+    var newPos = this.position.plus(stepped);
+
+    var obstacle = level.isBlocked(newPos, this.collisionBox);
+
+
+    if (obstacle > -1) {
+        // level.playerTouched(obstacle);
+    } else {
+
+        this.position = newPos;
     }
 };
 
-Level.prototype.generate = function() {
-    for (var x = 0; x < this.width; x++) {
-        this.map[x] = [];
-        for (var y = 0; y < this.height; y++) {
-            this.map[y][x] = 0;
-            this.data["vertices"][x * width + y] = 0;
-        }
+Player.prototype.moveY = function(dt, keys, level) {
+    this.speed.y += dt * gravity;
+
+    var stepped = new vec2(0, this.speed.y * dt);
+    var newPos = this.position.plus(stepped);
+
+    var collided = level.isBlocked(newPos, this.collisionBox);
+
+    if (collided > -1) {
+        // level.playerTouched(obstacle);
+
+        if (keys.up && this.speed.y > 0)
+            this.speed.y = -jumpSpeed;
+        else
+            this.speed.y = 0;
+    } else {
+        this.position = newPos;
     }
-};
-
-Level.prototype.bindRenderable = function(renderable) {
-	this.renderable = renderable;
 
 };
 
+Player.prototype.move = function(dt, keys, level) {
+    this.moveX(dt, keys, level);
+    this.moveY(dt, keys, level);
 
-module.exports = Level;
-},{"./renderable.js":4,"gl-matrix":6}],3:[function(require,module,exports){
-var game = require("./game.js");
+    this.update(dt);
+};
 
-game.init();
-},{"./game.js":1}],4:[function(require,module,exports){
+Player.prototype.update = function(dt) {
+
+    mat4.translate(this.renderable.translationMatrix, mat4.create(), [this.position.x, this.position.y, 0.0]);
+};
+
+Player.prototype.render = function() {
+    this.renderable.render();
+};
+
+module.exports = Player;
+},{"./renderable.js":5,"./vector2d.js":7,"gl-matrix":8}],5:[function(require,module,exports){
 var twgl = window.twgl;
 var mat4 = require('gl-matrix').mat4;
 var vec3 = require('gl-matrix').vec3;
@@ -152,7 +370,8 @@ function Renderable(gl, wrapProgram, program, tex) {
     this.texture = tex;
     this.translationMatrix = null;
 
-    this.mapDimen = 20.5;
+    this.mapDimenX = 8;
+    this.mapDimenY = 8;
 
     var x = 0;
     var y = 0;
@@ -176,6 +395,8 @@ function Renderable(gl, wrapProgram, program, tex) {
     this.y = 0;
 
     this.FSIZE = new Float32Array().BYTES_PER_ELEMENT;
+
+    this.customtilepos = new Float32Array([0,0]);
 
     this.initUniforms();
 };
@@ -210,6 +431,8 @@ Renderable.prototype.bind = function() {
 Renderable.prototype.render = function() {
     var gl = this.gl;
 
+    gl.useProgram(this.program);
+
     //Bind buffer;
     this.bind(gl);
 
@@ -217,7 +440,9 @@ Renderable.prototype.render = function() {
     twgl.setUniforms(this.programWrap, {
         tex: this.texture,
         u_transform: this.translationMatrix,
-        u_mapdimen: this.mapDimen
+        u_mapdimenx: this.mapDimenX,
+        u_mapdimeny: this.mapDimenY,
+        u_customtilepos: this.customtilepos
     });
 
     //Set attributes
@@ -238,10 +463,11 @@ Renderable.prototype.initUniforms = function() {
     this.translationMatrix = mat4.create();
     twgl.setUniforms(this.programWrap, {
         tex: this.texture,
-        u_transform: this.translationMatrix
+        u_transform: this.translationMatrix,
+        u_mapdimen: this.mapDimen,
+        u_customtilepos: this.customtilepos
     });
 };
-
 
 
 Renderable.prototype.initBuffers = function() {
@@ -257,18 +483,17 @@ Renderable.prototype.initBuffers = function() {
 
 
 module.exports = Renderable;
-},{"gl-matrix":6}],5:[function(require,module,exports){
+},{"gl-matrix":8}],6:[function(require,module,exports){
 var twgl = window.twgl;
 
 var mat4 = require('gl-matrix').mat4;
 var vec3 = require('gl-matrix').vec3;
 
-
-
 function Sprite(gl, wrapProgram, program, tex) {
     this.vertexBuffer = null;
     this.texture = tex;
     this.translationMatrix = null;
+
     var x = 0;
     var y = 0;
     var w = 100;
@@ -291,9 +516,6 @@ function Sprite(gl, wrapProgram, program, tex) {
         a_position: gl.getAttribLocation(this.program, 'a_position'),
         a_texcoord: gl.getAttribLocation(this.program, 'a_texcoord')
     }
-
-    this.x = 0;
-    this.y = 0;
 
     this.FSIZE = this.attribs.vertices.BYTES_PER_ELEMENT;
 
@@ -358,7 +580,19 @@ Sprite.prototype.initBuffers = function() {
 
 
 module.exports = Sprite;
-},{"gl-matrix":6}],6:[function(require,module,exports){
+},{"gl-matrix":8}],7:[function(require,module,exports){
+function Vector(x, y) {
+  this.x = x; this.y = y;
+}
+Vector.prototype.plus = function(other) {
+  return new Vector(this.x + other.x, this.y + other.y);
+};
+Vector.prototype.times = function(factor) {
+  return new Vector(this.x * factor, this.y * factor);
+};
+
+module.exports = Vector;
+},{}],8:[function(require,module,exports){
 /**
  * @fileoverview gl-matrix - High performance matrix and vector operations
  * @author Brandon Jones
@@ -396,7 +630,7 @@ exports.quat = require("./gl-matrix/quat.js");
 exports.vec2 = require("./gl-matrix/vec2.js");
 exports.vec3 = require("./gl-matrix/vec3.js");
 exports.vec4 = require("./gl-matrix/vec4.js");
-},{"./gl-matrix/common.js":7,"./gl-matrix/mat2.js":8,"./gl-matrix/mat2d.js":9,"./gl-matrix/mat3.js":10,"./gl-matrix/mat4.js":11,"./gl-matrix/quat.js":12,"./gl-matrix/vec2.js":13,"./gl-matrix/vec3.js":14,"./gl-matrix/vec4.js":15}],7:[function(require,module,exports){
+},{"./gl-matrix/common.js":9,"./gl-matrix/mat2.js":10,"./gl-matrix/mat2d.js":11,"./gl-matrix/mat3.js":12,"./gl-matrix/mat4.js":13,"./gl-matrix/quat.js":14,"./gl-matrix/vec2.js":15,"./gl-matrix/vec3.js":16,"./gl-matrix/vec4.js":17}],9:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -450,7 +684,7 @@ glMatrix.toRadian = function(a){
 
 module.exports = glMatrix;
 
-},{}],8:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -754,7 +988,7 @@ mat2.LDU = function (L, D, U, a) {
 
 module.exports = mat2;
 
-},{"./common.js":7}],9:[function(require,module,exports){
+},{"./common.js":9}],11:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -1073,7 +1307,7 @@ mat2d.frob = function (a) {
 
 module.exports = mat2d;
 
-},{"./common.js":7}],10:[function(require,module,exports){
+},{"./common.js":9}],12:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -1640,7 +1874,7 @@ mat3.frob = function (a) {
 
 module.exports = mat3;
 
-},{"./common.js":7}],11:[function(require,module,exports){
+},{"./common.js":9}],13:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -2925,7 +3159,7 @@ mat4.frob = function (a) {
 
 module.exports = mat4;
 
-},{"./common.js":7}],12:[function(require,module,exports){
+},{"./common.js":9}],14:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -3480,7 +3714,7 @@ quat.str = function (a) {
 
 module.exports = quat;
 
-},{"./common.js":7,"./mat3.js":10,"./vec3.js":14,"./vec4.js":15}],13:[function(require,module,exports){
+},{"./common.js":9,"./mat3.js":12,"./vec3.js":16,"./vec4.js":17}],15:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -4005,7 +4239,7 @@ vec2.str = function (a) {
 
 module.exports = vec2;
 
-},{"./common.js":7}],14:[function(require,module,exports){
+},{"./common.js":9}],16:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -4716,7 +4950,7 @@ vec3.str = function (a) {
 
 module.exports = vec3;
 
-},{"./common.js":7}],15:[function(require,module,exports){
+},{"./common.js":9}],17:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -5255,4 +5489,4 @@ vec4.str = function (a) {
 
 module.exports = vec4;
 
-},{"./common.js":7}]},{},[3]);
+},{"./common.js":9}]},{},[3]);
