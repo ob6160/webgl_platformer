@@ -1,6 +1,9 @@
 # webgl_platformer
 Originally a game for ld, now a platform game engine made with webgl. Totally rad.
 
+![Image of rad Monster Graphic](http://i.imgur.com/4dMgfNY.png)
+
+
 To install:
 
   sudo npm install -g watchify
