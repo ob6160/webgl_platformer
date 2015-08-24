@@ -3,7 +3,7 @@ Originally a game for ld, now a platform game engine made with webgl. Totally ra
 
 ![Image of rad Monster Graphic](http://i.imgur.com/4dMgfNY.png)
 
-/play sax
+:city_sunset::saxophone::notes:
 
 To install:
 
