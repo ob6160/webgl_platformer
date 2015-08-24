@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+	<head>
+	</head>
+	<body>
+		<canvas id="c"></canvas>
+
+		<script id="vs-map" type="notjs">
+			attribute vec4 a_position;
+			attribute vec2 a_texcoord;
+			attribute vec2 a_tilepos;
+
+			uniform mat4 u_projection;
+
+			uniform mat4 u_transform;
+			varying vec2 v_texcoord;
+			varying vec2 v_tilepos;
+			void main() {
+				gl_Position = u_projection * u_transform * a_position;
+				v_texcoord = a_texcoord;
+				v_tilepos = a_tilepos;
+
+			}
+		</script>
+		<script id="fs-map" type="notjs">
+			precision mediump float;
+
+			uniform sampler2D tex;
+			uniform float u_mapdimenx;
+			uniform float u_mapdimeny;
+			uniform vec2 u_customtilepos;
+
+			varying vec2 v_tilepos;
+			varying vec2 v_texcoord;
+
+			float scaleX = 1.0 / u_mapdimenx;
+			float scaleY = 1.0 / u_mapdimeny;
+
+			void main() {
+				//vec4 img = texture2D(tex, v_texcoord);
+				float y = v_tilepos.y + 1.0;
+				vec4 img = texture2D(tex, vec2((v_texcoord.x + v_tilepos.x + u_customtilepos.x) * scaleX,  (v_texcoord.y * scaleY) + (y + u_customtilepos.y) * scaleY));
+
+				if(img.a < 0.1) {
+					discard;
+				}
+
+				gl_FragColor = img;
+			}
+		</script>
+
+
+		<script id="vs-sprite" type="notjs">
+			attribute vec4 a_position;
+			attribute vec2 a_texcoord;
+
+			uniform mat4 u_projection;
+
+			uniform mat4 u_transform;
+			varying vec2 v_texcoord;
+			void main() {
+				gl_Position = u_projection * u_transform * a_position;
+				v_texcoord = a_texcoord;
+
+			}
+		</script>
+		<script id="fs-sprite" type="notjs">
+			precision mediump float;
+
+			uniform sampler2D tex;
+			
+			varying vec2 v_texcoord;
+
+
+			void main() {
+				vec4 img = texture2D(tex, v_texcoord);
+		
+				if(img.a < 0.1) {
+					discard;
+				}
+
+				gl_FragColor = img;
+			}
+		</script>
+		<script src="twgl-full.js"></script>
+		<script src="bundle.js"></script>
+	</body>
+</html>
