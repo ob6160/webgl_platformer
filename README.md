@@ -1,11 +1,11 @@
 # webgl_platformer
-Originally game for ld, now a platform game engine made with webgl.
+Originally a game for ld, now a platform game engine made with webgl. Totally rad.
 
-to install:
+To install:
 
-sudo npm install -g watchify
-sudo npm install -g http-server
+  sudo npm install -g watchify
+  sudo npm install -g http-server
 
-to run:
+To run & build changes at the SAME TIME o:
 
-npm run-script build
+  npm run-script build
