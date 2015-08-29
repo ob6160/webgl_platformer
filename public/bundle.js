@@ -96,6 +96,7 @@ function prepareUniform(program_sprite, program_map) {
 }
 
 
+
 var fps = 256,
     step = 1 / fps,
     dt = 0,
@@ -208,7 +209,6 @@ Level.prototype.generate = function() {
     this.map[3][10] = -1;
     this.map[3][9] = -1;
     this.map[2][9] = -1;
-
     this.map[2][5] = 1;
 };
 
@@ -285,8 +285,8 @@ function Player(position) {
     this.speed = new vec2(0.0, 0.0);
     this.size = new vec2(96, 196);
     this.collisionBox = new vec2(85, 196);
-    this.shift = new vec2(45,91);
 
+    this.shift = new vec2(45,91);
     this.renderable = null;
 };
 
@@ -321,7 +321,9 @@ Player.prototype.moveX = function(dt, keys, level) {
         this.speed.x = 0;
     }
 
-    var stepped = new vec2(Math.round(this.speed.x * dt), 0);
+
+    var stepped = new vec2(this.speed.x * dt, 0);
+
     var newPos = this.gamePosition.plus(stepped);
 
     var obstacle = level.isBlocked(newPos, this.collisionBox, this.shift);
@@ -336,7 +338,6 @@ Player.prototype.moveX = function(dt, keys, level) {
 
 Player.prototype.moveY = function(dt, keys, level) {
 
-	
     this.speed.y += dt * gravity;
 
     var stepped = new vec2(0, this.speed.y * dt);
