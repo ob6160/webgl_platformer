@@ -8,5 +8,8 @@
     "build": "watchify lib/main.js -o public/bundle.js & http-server"
   },
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "gl-matrix": "^2.3.1"
+  }
 }
