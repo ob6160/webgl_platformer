@@ -39,7 +39,7 @@
 			void main() {
 				//vec4 img = texture2D(tex, v_texcoord);
 				float y = v_tilepos.y + 1.0;
-				vec4 img = texture2D(tex, vec2((v_texcoord.x + v_tilepos.x + u_customtilepos.x) * scaleX,  (v_texcoord.y * scaleY) + (y + u_customtilepos.y) * scaleY));
+				vec4 img = texture2D(tex, vec2(((v_texcoord.x + v_tilepos.x + u_customtilepos.x) * scaleX),  (v_texcoord.y * scaleY) + (y + u_customtilepos.y) * scaleY));
 
 				if(img.a < 0.1) {
 					discard;
