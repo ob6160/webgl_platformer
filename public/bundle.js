@@ -41,12 +41,12 @@ function init() {
     prepareUniform(program_sprite, program_map);
 
 
-    gameLevel = new level(20, 20, 64, 64, gl.canvas.width, gl.canvas.height);
+    gameLevel = new level(100, 20, 64, 64, gl.canvas.width, gl.canvas.height);
     gameLevel.generate();
     gameLevel.bindRenderable(new renderable(gl, program_map, program_map.program, textures.tilesheet));
 
 
-    gamePlayer = new player(new vec2(350.0, 0.0), new vec2(350.0, 300.0));
+    gamePlayer = new player(new vec2(400.0, 0.0), new vec2(400.0 - 32, 300.0));
     gamePlayer.bindRenderable(new renderable(gl, program_map, program_map.program, null));
 
 
@@ -98,7 +98,7 @@ function prepareUniform(program_sprite, program_map) {
 
 
 
-var fps = 512,
+var fps = 1024,
     step = 1 / fps,
     dt = 0,
     now, last = timestamp();
@@ -294,7 +294,7 @@ function Player(position, screenPosition) {
 
     this.speed = new vec2(0.0, 0.0);
     this.size = new vec2(64, 128);
-    this.collisionBox = new vec2(62, 128);
+    this.collisionBox = new vec2(60, 128);
 
     this.shift = new vec2(1, 0);
     this.renderable = null;
@@ -317,7 +317,7 @@ Player.prototype.initRenderable = function() {
     this.renderable.initBuffers();
 };
 
-var playerXSpeed = 300;
+var playerXSpeed = 1000;
 var gravity = 1000;
 var jumpSpeed = 550;
 
@@ -329,7 +329,7 @@ Player.prototype.moveX = function(dt, keys, level) {
         this.speed.x = 0;
     }
 
-    var stepped = new vec2(Math.round(this.speed.x * dt), 0);
+    var stepped = new vec2(this.speed.x * dt, 0);
     var newPos = this.gamePosition.plus(stepped);
     var obstacle = level.isBlocked(newPos, this.collisionBox, this.shift);
 
@@ -368,18 +368,20 @@ Player.prototype.update = function(dt, keys, level) {
     this.cameraPosition.y = this.gamePosition.y - this.screenPosition.y;
 
     //If we escape the bounds of the level
-    if (this.gamePosition.x < 350) {
-        this.screenPosition.x = this.gamePosition.x;
-    } else if (this.gamePosition.x > (level.width * (level.tileW - 1)) - ((level.windowW * 0.5 + this.size.x * 0.5))) {
-    	this.screenPosition.x =  (this.gamePosition.x - ((level.width * level.tileW) - level.windowW));
+    if (this.gamePosition.x < level.windowW * 0.5 - this.size.x * 0.5) {
+        this.screenPosition.x = (this.gamePosition.x);
+    } else if (this.gamePosition.x > (level.width * level.tileW) - (level.windowW * 0.5 + this.size.x * 0.5)) {
+    	this.screenPosition.x = (this.gamePosition.x - ((level.width * level.tileW) - level.windowW));
     } else {
         level.camera.offset.x = -this.cameraPosition.x;
     };
 
+    console.log(this.screenPosition.x);
+
     level.camera.offset.y = -this.cameraPosition.y;
 
-    mat4.translate(this.renderable.translationMatrix, mat4.create(), [this.screenPosition.x, this.screenPosition.y, 0.0]);
-    mat4.translate(level.renderable.translationMatrix, mat4.create(), [level.camera.offset.x, level.camera.offset.y, 0.0]);
+    mat4.translate(this.renderable.translationMatrix, mat4.create(), [Math.round(this.screenPosition.x), Math.round(this.screenPosition.y), 0.0]);
+    mat4.translate(level.renderable.translationMatrix, mat4.create(), [Math.round(level.camera.offset.x), Math.round(level.camera.offset.y), 0.0]);
 
     this.move(dt, keys, level);
 };
