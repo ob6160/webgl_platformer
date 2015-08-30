@@ -1,4 +1,60 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+var vec2 = require("./vector2d")
+
+function AABB(x, y, x1, y1) {
+    this.pos = new vec2(x, y);
+    this.pos1 = new vec2(x1, y1);
+
+    this.dimension = new vec2(Math.abs(this.pos1.x - this.pos.x), Math.abs(this.pos1.y - this.pos.y));
+
+};
+
+AABB.prototype.doesOverlap = function(comparison) {
+    if (!(comparison instanceof AABB)) {
+        return false;
+    }
+
+
+    if (this.pos1.x <= comparison.pos.x || this.pos.x >= comparison.pos1.x)
+        return false;
+    if (this.pos1.y <= comparison.pos.y || this.pos.y >= comparison.pos1.y)
+        return false;
+
+    return true;
+    // return (Math.abs(this.pos.x - comparison.pos.x) * 2 < (this.dimension.x + comparison.dimension.x)) &&
+    //     (Math.abs(this.pos.y - comparison.pos.y) * 2 < (this.dimension.y + this.dimension.y));
+};
+
+AABB.prototype.resolveOverlap = function(comparison) {
+    var left = this.pos.x - comparison.pos1.x;
+    var right = this.pos1.x - comparison.pos.x;
+    var top = this.pos.y - comparison.pos1.y;
+    var bottom = this.pos1.y - comparison.pos.y;
+    var res = new vec2(0, 0);
+
+    if ((left > 0 || right < 0) || (top > 0 || bottom < 0))
+        return res;
+
+    if (Math.abs(left) < right)
+        res.x = left;
+    else
+        res.x = right;
+
+    if (Math.abs(top) < bottom)
+        res.y = top;
+    else
+        res.y = bottom;
+
+    if (Math.abs(res.x) < Math.abs(res.y))
+        res.y = 0;
+    else
+        res.x = 0;
+
+    return res;
+};
+
+module.exports = AABB;
+},{"./vector2d":8}],2:[function(require,module,exports){
 //Main entry point into game.
 var twgl = window.twgl;
 var mat4 = require('gl-matrix').mat4;
@@ -44,9 +100,9 @@ function init() {
     gameLevel = new level(100, 20, 64, 64, gl.canvas.width, gl.canvas.height);
     gameLevel.generate();
     gameLevel.bindRenderable(new renderable(gl, program_map, program_map.program, textures.tilesheet));
+    mat4.translate(gameLevel.renderable.translationMatrix, mat4.create(), [Math.round(gameLevel.camera.offset.x), Math.round(gameLevel.camera.offset.y), 0.0]);
 
-
-    gamePlayer = new player(new vec2(400.0, 0.0), new vec2(400.0 - 32, 300.0));
+    gamePlayer = new player(new vec2(400.0, 0.0), new vec2(400.0, 300.0), new vec2(64, 64), new vec2(64, 64));
     gamePlayer.bindRenderable(new renderable(gl, program_map, program_map.program, null));
 
 
@@ -98,7 +154,7 @@ function prepareUniform(program_sprite, program_map) {
 
 
 
-var fps = 1024,
+var fps = 60,
     step = 1 / fps,
     dt = 0,
     now, last = timestamp();
@@ -153,12 +209,13 @@ function update(dt) {
 };
 
 module.exports.init = init;
-},{"./level.js":2,"./player.js":4,"./renderable.js":5,"./sprite.js":6,"./vector2d.js":7,"gl-matrix":8}],2:[function(require,module,exports){
+},{"./level.js":3,"./player.js":5,"./renderable.js":6,"./sprite.js":7,"./vector2d.js":8,"gl-matrix":9}],3:[function(require,module,exports){
 var twgl = window.twgl;
 
 var mat4 = require('gl-matrix').mat4;
 var vec3 = require('gl-matrix').vec3;
-var vec2 = require("./vector2d.js");
+var vec2 = require("./vector2d");
+var aabb = require("./aabb");
 
 var renderable = require("./renderable.js");
 
@@ -179,9 +236,6 @@ function Level(w, h, tW, tH, wW, wH) {
 
     this.renderable = null;
 
-    this.data = {
-        vertices: []
-    }
 };
 
 Level.prototype.generate = function() {
@@ -219,6 +273,8 @@ Level.prototype.generate = function() {
     this.map[15][9] = -1;
     this.map[14][9] = -1;
     this.map[15][5] = 1;
+
+    this.map[5][8] = 1;
 };
 
 Level.prototype.bindRenderable = function(renderable) {
@@ -233,14 +289,24 @@ Level.prototype.isBlocked = function(position, size, shift) {
     var yStart = Math.floor((position.y + shift.y) / this.tileH);
     var yEnd = Math.ceil((position.y + size.y) / this.tileH);
 
+    var corrects = [];
+
     if (xStart < 0 || xEnd > this.width || yStart < 0)
-        return 0;
+        return [[10, new aabb(x * this.tileW, y * this.tileH, x * this.tileW + this.tileW, y * this.tileH + this.tileH)]];
     for (var y = yStart; y < yEnd; y++) {
         for (var x = xStart; x < xEnd; x++) {
             var fieldType = this.map[x][y];
-            if (fieldType > -1) return fieldType;
+            if (fieldType > -1) corrects.push([fieldType, new aabb(x * this.tileW, y * this.tileH, x * this.tileW + this.tileW, y * this.tileH + this.tileH)]);
         }
     }
+
+    if(corrects.length === 0) {
+    	return [[-1, new aabb(x * this.tileW, y * this.tileH, x * this.tileW + this.tileW, y * this.tileH + this.tileH)]];	
+    } else {
+    	return corrects;
+    }
+    
+
 };
 
 Level.prototype.initRenderable = function() {
@@ -274,11 +340,11 @@ Level.prototype.render = function() {
 
 
 module.exports = Level;
-},{"./renderable.js":5,"./vector2d.js":7,"gl-matrix":8}],3:[function(require,module,exports){
+},{"./aabb":1,"./renderable.js":6,"./vector2d":8,"gl-matrix":9}],4:[function(require,module,exports){
 var game = require("./game.js");
 
 game.init();
-},{"./game.js":1}],4:[function(require,module,exports){
+},{"./game.js":2}],5:[function(require,module,exports){
 var twgl = window.twgl;
 
 var mat4 = require('gl-matrix').mat4;
@@ -286,17 +352,20 @@ var vec3 = require('gl-matrix').vec3;
 
 var renderable = require("./renderable.js");
 var vec2 = require("./vector2d.js");
+var aabb = require("./aabb");
 
-function Player(position, screenPosition) {
+function Player(position, screenPosition, size, collisionBox, shiftBy) {
     this.cameraPosition = position;
     this.gamePosition = position.plus(new vec2(0, 0));
-    this.screenPosition = screenPosition;
+    this.screenPosition = screenPosition.plus(new vec2(-size.x / 2, 0));
 
     this.speed = new vec2(0.0, 0.0);
-    this.size = new vec2(64, 128);
-    this.collisionBox = new vec2(60, 128);
+    this.size = size;
+    this.collisionBox = collisionBox;
 
-    this.shift = new vec2(1, 0);
+    this.aabb = new aabb(this.gamePosition.x, this.gamePosition.y, this.gamePosition.x + this.collisionBox.x, this.gamePosition.y + this.collisionBox.y);
+
+    this.shift = new vec2(0, 0);
     this.renderable = null;
 };
 
@@ -311,15 +380,17 @@ Player.prototype.initRenderable = function() {
         return false;
     }
 
+    mat4.translate(this.renderable.translationMatrix, mat4.create(), [Math.round(this.screenPosition.x), Math.round(this.screenPosition.y), 0.0]);
+
     this.renderable.mapDimenX = 8;
     this.renderable.mapDimenY = 4;
     this.renderable.addQuad(0, 0, this.size.x, this.size.y, 0, 0);
     this.renderable.initBuffers();
 };
 
-var playerXSpeed = 1000;
+var playerXSpeed = 500;
 var gravity = 1000;
-var jumpSpeed = 550;
+var jumpSpeed = 600;
 
 Player.prototype.moveX = function(dt, keys, level) {
     if (keys.left) this.speed.x = -playerXSpeed;
@@ -333,55 +404,83 @@ Player.prototype.moveX = function(dt, keys, level) {
     var newPos = this.gamePosition.plus(stepped);
     var obstacle = level.isBlocked(newPos, this.collisionBox, this.shift);
 
-    if (obstacle > -1) {
-
-    } else {
-        this.gamePosition = newPos;
+    if(!obstacle[0][0] > -1) {
+		this.gamePosition.x = newPos.x;
     }
+
+    for (var i = 0; i < obstacle.length; i++) {
+        this.aabb.pos = new vec2(newPos.x, newPos.y);
+        this.aabb.pos1 = new vec2(newPos.x + this.collisionBox.x, newPos.y + this.collisionBox.y);
+        var obs = obstacle[i];
+        //If it's solid and overlapping
+        if (obs[1].doesOverlap(this.aabb)) {
+            newPos.x += obs[1].resolveOverlap(this.aabb).x;
+        };
+    };
+
+    this.gamePosition.x = newPos.x;
 };
 
 Player.prototype.moveY = function(dt, keys, level) {
-    this.speed.y += Math.ceil(dt * gravity);
+    this.speed.y += dt * gravity;
 
     var stepped = new vec2(0, this.speed.y * dt);
     var newPos = this.gamePosition.plus(stepped);
-    var collided = level.isBlocked(newPos, this.collisionBox, this.shift);
+    var obstacle = level.isBlocked(newPos, this.collisionBox, this.shift);
 
-    if (collided > -1) {
+
+    var isOverlap = false;
+
+    if (obstacle[0][0] > -1) {
         if (keys.up && this.speed.y > 0)
             this.speed.y = -jumpSpeed;
         else
             this.speed.y = 0;
     } else {
-        this.gamePosition = newPos;
+        this.gamePosition.y = newPos.y;
     }
 
+    for (var i = 0; i < obstacle.length; i++) {
+        this.aabb.pos = new vec2(newPos.x, newPos.y);
+        this.aabb.pos1 = new vec2(newPos.x + this.collisionBox.x, newPos.y + this.collisionBox.y);
+        var obs = obstacle[i];
+
+        //If it's overlapping correct
+        if (obs[1].doesOverlap(this.aabb)) {
+            newPos.y += obs[1].resolveOverlap(this.aabb).y;
+        };
+    };
+
+    //Apply corrections
+    this.gamePosition.y = newPos.y;
 };
 
 Player.prototype.move = function(dt, keys, level) {
     this.moveX(dt, keys, level);
     this.moveY(dt, keys, level);
+
 };
 
 Player.prototype.update = function(dt, keys, level) {
-    this.cameraPosition.x = this.gamePosition.x - this.screenPosition.x;
-    this.cameraPosition.y = this.gamePosition.y - this.screenPosition.y;
+    
+    
 
     //If we escape the bounds of the level
     if (this.gamePosition.x < level.windowW * 0.5 - this.size.x * 0.5) {
-        this.screenPosition.x = (this.gamePosition.x);
-    } else if (this.gamePosition.x > (level.width * level.tileW) - (level.windowW * 0.5 + this.size.x * 0.5)) {
-    	this.screenPosition.x = (this.gamePosition.x - ((level.width * level.tileW) - level.windowW));
-    } else {
-        level.camera.offset.x = -this.cameraPosition.x;
-    };
+        this.screenPosition.x = this.gamePosition.x;
+    }
+    if (this.gamePosition.x > (level.width * level.tileW) - (level.windowW * 0.5 + this.size.x * 0.5)) {
+        this.screenPosition.x = (this.gamePosition.x - ((level.width * level.tileW) - level.windowW));
+    } 
 
-    console.log(this.screenPosition.x);
+    this.cameraPosition.x = this.gamePosition.x - this.screenPosition.x;
+    this.cameraPosition.y = this.gamePosition.y - this.screenPosition.y;
 
+	level.camera.offset.x = -this.cameraPosition.x;	
     level.camera.offset.y = -this.cameraPosition.y;
 
-    mat4.translate(this.renderable.translationMatrix, mat4.create(), [Math.round(this.screenPosition.x), Math.round(this.screenPosition.y), 0.0]);
     mat4.translate(level.renderable.translationMatrix, mat4.create(), [Math.round(level.camera.offset.x), Math.round(level.camera.offset.y), 0.0]);
+    mat4.translate(this.renderable.translationMatrix, mat4.create(), [Math.round(this.screenPosition.x), Math.round(this.screenPosition.y), 0.0]);
 
     this.move(dt, keys, level);
 };
@@ -391,7 +490,7 @@ Player.prototype.render = function() {
 };
 
 module.exports = Player;
-},{"./renderable.js":5,"./vector2d.js":7,"gl-matrix":8}],5:[function(require,module,exports){
+},{"./aabb":1,"./renderable.js":6,"./vector2d.js":8,"gl-matrix":9}],6:[function(require,module,exports){
 var twgl = window.twgl;
 var mat4 = require('gl-matrix').mat4;
 var vec3 = require('gl-matrix').vec3;
@@ -514,7 +613,7 @@ Renderable.prototype.initBuffers = function() {
 
 
 module.exports = Renderable;
-},{"gl-matrix":8}],6:[function(require,module,exports){
+},{"gl-matrix":9}],7:[function(require,module,exports){
 var twgl = window.twgl;
 
 var mat4 = require('gl-matrix').mat4;
@@ -611,7 +710,7 @@ Sprite.prototype.initBuffers = function() {
 
 
 module.exports = Sprite;
-},{"gl-matrix":8}],7:[function(require,module,exports){
+},{"gl-matrix":9}],8:[function(require,module,exports){
 function Vector(x, y) {
   this.x = x; this.y = y;
 }
@@ -623,7 +722,7 @@ Vector.prototype.times = function(factor) {
 };
 
 module.exports = Vector;
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 /**
  * @fileoverview gl-matrix - High performance matrix and vector operations
  * @author Brandon Jones
@@ -661,7 +760,7 @@ exports.quat = require("./gl-matrix/quat.js");
 exports.vec2 = require("./gl-matrix/vec2.js");
 exports.vec3 = require("./gl-matrix/vec3.js");
 exports.vec4 = require("./gl-matrix/vec4.js");
-},{"./gl-matrix/common.js":9,"./gl-matrix/mat2.js":10,"./gl-matrix/mat2d.js":11,"./gl-matrix/mat3.js":12,"./gl-matrix/mat4.js":13,"./gl-matrix/quat.js":14,"./gl-matrix/vec2.js":15,"./gl-matrix/vec3.js":16,"./gl-matrix/vec4.js":17}],9:[function(require,module,exports){
+},{"./gl-matrix/common.js":10,"./gl-matrix/mat2.js":11,"./gl-matrix/mat2d.js":12,"./gl-matrix/mat3.js":13,"./gl-matrix/mat4.js":14,"./gl-matrix/quat.js":15,"./gl-matrix/vec2.js":16,"./gl-matrix/vec3.js":17,"./gl-matrix/vec4.js":18}],10:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -715,7 +814,7 @@ glMatrix.toRadian = function(a){
 
 module.exports = glMatrix;
 
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -1019,7 +1118,7 @@ mat2.LDU = function (L, D, U, a) {
 
 module.exports = mat2;
 
-},{"./common.js":9}],11:[function(require,module,exports){
+},{"./common.js":10}],12:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -1338,7 +1437,7 @@ mat2d.frob = function (a) {
 
 module.exports = mat2d;
 
-},{"./common.js":9}],12:[function(require,module,exports){
+},{"./common.js":10}],13:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -1905,7 +2004,7 @@ mat3.frob = function (a) {
 
 module.exports = mat3;
 
-},{"./common.js":9}],13:[function(require,module,exports){
+},{"./common.js":10}],14:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -3190,7 +3289,7 @@ mat4.frob = function (a) {
 
 module.exports = mat4;
 
-},{"./common.js":9}],14:[function(require,module,exports){
+},{"./common.js":10}],15:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -3745,7 +3844,7 @@ quat.str = function (a) {
 
 module.exports = quat;
 
-},{"./common.js":9,"./mat3.js":12,"./vec3.js":16,"./vec4.js":17}],15:[function(require,module,exports){
+},{"./common.js":10,"./mat3.js":13,"./vec3.js":17,"./vec4.js":18}],16:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -4270,7 +4369,7 @@ vec2.str = function (a) {
 
 module.exports = vec2;
 
-},{"./common.js":9}],16:[function(require,module,exports){
+},{"./common.js":10}],17:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -4981,7 +5080,7 @@ vec3.str = function (a) {
 
 module.exports = vec3;
 
-},{"./common.js":9}],17:[function(require,module,exports){
+},{"./common.js":10}],18:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -5520,4 +5619,4 @@ vec4.str = function (a) {
 
 module.exports = vec4;
 
-},{"./common.js":9}]},{},[3]);
+},{"./common.js":10}]},{},[4]);
