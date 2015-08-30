@@ -13,8 +13,7 @@ AABB.prototype.doesOverlap = function(comparison) {
     if (!(comparison instanceof AABB)) {
         return false;
     }
-
-
+    
     if (this.pos1.x <= comparison.pos.x || this.pos.x >= comparison.pos1.x)
         return false;
     if (this.pos1.y <= comparison.pos.y || this.pos.y >= comparison.pos1.y)
@@ -102,7 +101,7 @@ function init() {
     gameLevel.bindRenderable(new renderable(gl, program_map, program_map.program, textures.tilesheet));
     mat4.translate(gameLevel.renderable.translationMatrix, mat4.create(), [Math.round(gameLevel.camera.offset.x), Math.round(gameLevel.camera.offset.y), 0.0]);
 
-    gamePlayer = new player(new vec2(400.0, 0.0), new vec2(400.0, 300.0), new vec2(64, 64), new vec2(64, 64));
+    gamePlayer = new player(new vec2(400.0, 0.0), new vec2(400.0, 300.0), new vec2(64, 128), new vec2(64, 128));
     gamePlayer.bindRenderable(new renderable(gl, program_map, program_map.program, null));
 
 
@@ -292,7 +291,7 @@ Level.prototype.isBlocked = function(position, size, shift) {
     var corrects = [];
 
     if (xStart < 0 || xEnd > this.width || yStart < 0)
-        return [[10, new aabb(x * this.tileW, y * this.tileH, x * this.tileW + this.tileW, y * this.tileH + this.tileH)]];
+        return [[10, null]];
     for (var y = yStart; y < yEnd; y++) {
         for (var x = xStart; x < xEnd; x++) {
             var fieldType = this.map[x][y];
@@ -359,6 +358,8 @@ function Player(position, screenPosition, size, collisionBox, shiftBy) {
     this.gamePosition = position.plus(new vec2(0, 0));
     this.screenPosition = screenPosition.plus(new vec2(-size.x / 2, 0));
 
+    this.doubleJump = false;
+
     this.speed = new vec2(0.0, 0.0);
     this.size = size;
     this.collisionBox = collisionBox;
@@ -404,14 +405,15 @@ Player.prototype.moveX = function(dt, keys, level) {
     var newPos = this.gamePosition.plus(stepped);
     var obstacle = level.isBlocked(newPos, this.collisionBox, this.shift);
 
-    if(!obstacle[0][0] > -1) {
-		this.gamePosition.x = newPos.x;
-    }
-
     for (var i = 0; i < obstacle.length; i++) {
         this.aabb.pos = new vec2(newPos.x, newPos.y);
         this.aabb.pos1 = new vec2(newPos.x + this.collisionBox.x, newPos.y + this.collisionBox.y);
         var obs = obstacle[i];
+        if (obs[1] == null && obs[0] > -1) {
+            newPos.x = this.gamePosition.x;
+            continue;
+        };
+
         //If it's solid and overlapping
         if (obs[1].doesOverlap(this.aabb)) {
             newPos.x += obs[1].resolveOverlap(this.aabb).x;
@@ -428,23 +430,28 @@ Player.prototype.moveY = function(dt, keys, level) {
     var newPos = this.gamePosition.plus(stepped);
     var obstacle = level.isBlocked(newPos, this.collisionBox, this.shift);
 
-
-    var isOverlap = false;
-
+    
+    //console.log(this.speed.y);
     if (obstacle[0][0] > -1) {
-        if (keys.up && this.speed.y > 0)
-            this.speed.y = -jumpSpeed;
-        else
+        if (keys.up && this.speed.y > 0) {
+  	
+        	this.speed.y = -jumpSpeed;
+
+            
+        } else {
+        	
             this.speed.y = 0;
-    } else {
-        this.gamePosition.y = newPos.y;
-    }
+        }
+    };
 
     for (var i = 0; i < obstacle.length; i++) {
         this.aabb.pos = new vec2(newPos.x, newPos.y);
         this.aabb.pos1 = new vec2(newPos.x + this.collisionBox.x, newPos.y + this.collisionBox.y);
         var obs = obstacle[i];
-
+        if (obs[1] == null && obs[0] > -1) {
+            newPos.y = this.gamePosition.y;
+            continue;
+        };
         //If it's overlapping correct
         if (obs[1].doesOverlap(this.aabb)) {
             newPos.y += obs[1].resolveOverlap(this.aabb).y;
@@ -462,21 +469,18 @@ Player.prototype.move = function(dt, keys, level) {
 };
 
 Player.prototype.update = function(dt, keys, level) {
-    
-    
-
     //If we escape the bounds of the level
     if (this.gamePosition.x < level.windowW * 0.5 - this.size.x * 0.5) {
         this.screenPosition.x = this.gamePosition.x;
     }
     if (this.gamePosition.x > (level.width * level.tileW) - (level.windowW * 0.5 + this.size.x * 0.5)) {
         this.screenPosition.x = (this.gamePosition.x - ((level.width * level.tileW) - level.windowW));
-    } 
+    }
 
     this.cameraPosition.x = this.gamePosition.x - this.screenPosition.x;
     this.cameraPosition.y = this.gamePosition.y - this.screenPosition.y;
 
-	level.camera.offset.x = -this.cameraPosition.x;	
+    level.camera.offset.x = -this.cameraPosition.x;
     level.camera.offset.y = -this.cameraPosition.y;
 
     mat4.translate(level.renderable.translationMatrix, mat4.create(), [Math.round(level.camera.offset.x), Math.round(level.camera.offset.y), 0.0]);
