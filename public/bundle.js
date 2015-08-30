@@ -98,7 +98,7 @@ function prepareUniform(program_sprite, program_map) {
 
 
 
-var fps = 60,
+var fps = 512,
     step = 1 / fps,
     dt = 0,
     now, last = timestamp();
@@ -317,7 +317,7 @@ Player.prototype.initRenderable = function() {
     this.renderable.initBuffers();
 };
 
-var playerXSpeed = 200;
+var playerXSpeed = 300;
 var gravity = 1000;
 var jumpSpeed = 550;
 
@@ -367,7 +367,6 @@ Player.prototype.update = function(dt, keys, level) {
     this.cameraPosition.x = this.gamePosition.x - this.screenPosition.x;
     this.cameraPosition.y = this.gamePosition.y - this.screenPosition.y;
 
-    console.log((level.windowW * 0.5 + this.collisionBox.x * 0.5));
     //If we escape the bounds of the level
     if (this.gamePosition.x < 350) {
         this.screenPosition.x = this.gamePosition.x;
