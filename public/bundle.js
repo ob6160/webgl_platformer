@@ -20,8 +20,6 @@ AABB.prototype.doesOverlap = function(comparison) {
         return false;
 
     return true;
-    // return (Math.abs(this.pos.x - comparison.pos.x) * 2 < (this.dimension.x + comparison.dimension.x)) &&
-    //     (Math.abs(this.pos.y - comparison.pos.y) * 2 < (this.dimension.y + this.dimension.y));
 };
 
 AABB.prototype.resolveOverlap = function(comparison) {
@@ -84,8 +82,8 @@ function init() {
     currentlyPressed = trackKeys(arrowCodes);
 
     gl = twgl.getWebGLContext(document.getElementById("c"));
-    gl.canvas.width = 800;
-    gl.canvas.height = 600;
+    gl.canvas.width = 1200;
+    gl.canvas.height = 800;
 
     var program_sprite = twgl.createProgramInfo(gl, ["vs-sprite", "fs-sprite"]);
     var program_map = twgl.createProgramInfo(gl, ["vs-map", "fs-map"]);
@@ -101,8 +99,8 @@ function init() {
     gameLevel.bindRenderable(new renderable(gl, program_map, program_map.program, textures.tilesheet));
     mat4.translate(gameLevel.renderable.translationMatrix, mat4.create(), [Math.round(gameLevel.camera.offset.x), Math.round(gameLevel.camera.offset.y), 0.0]);
 
-    gamePlayer = new player(new vec2(400.0, 0.0), new vec2(400.0, 300.0), new vec2(64, 128), new vec2(64, 128));
-    gamePlayer.bindRenderable(new renderable(gl, program_map, program_map.program, null));
+    gamePlayer = new player(new vec2(400.0, 0.0), new vec2(400.0, 300.0), new vec2(128, 256), new vec2(120, 256));
+    gamePlayer.bindRenderable(new renderable(gl, program_map, program_map.program, textures.player));
 
 
 
@@ -153,7 +151,7 @@ function prepareUniform(program_sprite, program_map) {
 
 
 
-var fps = 60,
+var fps = 1200,
     step = 1 / fps,
     dt = 0,
     now, last = timestamp();
@@ -239,6 +237,7 @@ function Level(w, h, tW, tH, wW, wH) {
 
 Level.prototype.generate = function() {
     var levelProportion = this.height * 0.4;
+    this.border = new vec2(0, levelProportion);
     for (var x = 0; x < this.width; x++) {
         this.map[x] = [];
         for (var y = 0; y < this.height; y++) {
@@ -363,10 +362,9 @@ function Player(position, screenPosition, size, collisionBox, shiftBy) {
     this.speed = new vec2(0.0, 0.0);
     this.size = size;
     this.collisionBox = collisionBox;
-
-    this.aabb = new aabb(this.gamePosition.x, this.gamePosition.y, this.gamePosition.x + this.collisionBox.x, this.gamePosition.y + this.collisionBox.y);
-
-    this.shift = new vec2(0, 0);
+    this.shift = new vec2(16, 128);
+    
+    this.aabb = new aabb(this.gamePosition.x + this.shift.x, this.gamePosition.y + this.shift.y, this.gamePosition.x + this.collisionBox.x, this.gamePosition.y + this.collisionBox.y);
     this.renderable = null;
 };
 
@@ -389,9 +387,9 @@ Player.prototype.initRenderable = function() {
     this.renderable.initBuffers();
 };
 
-var playerXSpeed = 500;
+var playerXSpeed = 300;
 var gravity = 1000;
-var jumpSpeed = 600;
+var jumpSpeed = 510;
 
 Player.prototype.moveX = function(dt, keys, level) {
     if (keys.left) this.speed.x = -playerXSpeed;
@@ -406,7 +404,7 @@ Player.prototype.moveX = function(dt, keys, level) {
     var obstacle = level.isBlocked(newPos, this.collisionBox, this.shift);
 
     for (var i = 0; i < obstacle.length; i++) {
-        this.aabb.pos = new vec2(newPos.x, newPos.y);
+        this.aabb.pos = new vec2(newPos.x + this.shift.x, newPos.y + this.shift.y);
         this.aabb.pos1 = new vec2(newPos.x + this.collisionBox.x, newPos.y + this.collisionBox.y);
         var obs = obstacle[i];
         if (obs[1] == null && obs[0] > -1) {
@@ -434,18 +432,14 @@ Player.prototype.moveY = function(dt, keys, level) {
     //console.log(this.speed.y);
     if (obstacle[0][0] > -1) {
         if (keys.up && this.speed.y > 0) {
-  	
         	this.speed.y = -jumpSpeed;
-
-            
         } else {
-        	
             this.speed.y = 0;
         }
     };
 
     for (var i = 0; i < obstacle.length; i++) {
-        this.aabb.pos = new vec2(newPos.x, newPos.y);
+        this.aabb.pos = new vec2(newPos.x + this.shift.x, newPos.y + this.shift.y);
         this.aabb.pos1 = new vec2(newPos.x + this.collisionBox.x, newPos.y + this.collisionBox.y);
         var obs = obstacle[i];
         if (obs[1] == null && obs[0] > -1) {
@@ -476,6 +470,11 @@ Player.prototype.update = function(dt, keys, level) {
     if (this.gamePosition.x > (level.width * level.tileW) - (level.windowW * 0.5 + this.size.x * 0.5)) {
         this.screenPosition.x = (this.gamePosition.x - ((level.width * level.tileW) - level.windowW));
     }
+
+
+    if((this.gamePosition.y / level.tileH) < level.border.y - 2) {
+    	this.screenPosition.y = this.gamePosition.y;
+    };
 
     this.cameraPosition.x = this.gamePosition.x - this.screenPosition.x;
     this.cameraPosition.y = this.gamePosition.y - this.screenPosition.y;
