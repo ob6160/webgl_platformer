@@ -82,8 +82,9 @@ function init() {
     currentlyPressed = trackKeys(arrowCodes);
 
     gl = twgl.getWebGLContext(document.getElementById("c"));
-    gl.canvas.width = 1200;
-    gl.canvas.height = 800;
+    twgl.resizeCanvasToDisplaySize(gl.canvas);
+    // gl.canvas.width = 1200;
+    // gl.canvas.height = 800;
 
     var program_sprite = twgl.createProgramInfo(gl, ["vs-sprite", "fs-sprite"]);
     var program_map = twgl.createProgramInfo(gl, ["vs-map", "fs-map"]);
@@ -94,12 +95,12 @@ function init() {
     prepareUniform(program_sprite, program_map);
 
 
-    gameLevel = new level(100, 20, 64, 64, gl.canvas.width, gl.canvas.height);
+    gameLevel = new level(100, 100, 64, 64, gl.canvas.width, gl.canvas.height);
     gameLevel.generate();
     gameLevel.bindRenderable(new renderable(gl, program_map, program_map.program, textures.tilesheet));
     mat4.translate(gameLevel.renderable.translationMatrix, mat4.create(), [Math.round(gameLevel.camera.offset.x), Math.round(gameLevel.camera.offset.y), 0.0]);
 
-    gamePlayer = new player(new vec2(400.0, 0.0), new vec2(400.0, 300.0), new vec2(128, 256), new vec2(120, 256));
+    gamePlayer = new player(new vec2(400.0, 0.0), new vec2(400.0, 300.0), new vec2(16, 32), new vec2(16, 32));
     gamePlayer.bindRenderable(new renderable(gl, program_map, program_map.program, textures.player));
 
 
@@ -151,7 +152,7 @@ function prepareUniform(program_sprite, program_map) {
 
 
 
-var fps = 1200,
+var fps = 512,
     step = 1 / fps,
     dt = 0,
     now, last = timestamp();
@@ -217,7 +218,7 @@ var aabb = require("./aabb");
 var renderable = require("./renderable.js");
 
 function Level(w, h, tW, tH, wW, wH) {
-    this.map = [];
+    this.map = new Float32Array(w * h);
     this.width = w;
     this.height = h;
 
@@ -228,7 +229,7 @@ function Level(w, h, tW, tH, wW, wH) {
     this.tileH = tH;
 
     this.camera = {
-        offset: new vec2(0,0)
+        offset: new vec2(0, 0)
     };
 
     this.renderable = null;
@@ -236,43 +237,28 @@ function Level(w, h, tW, tH, wW, wH) {
 };
 
 Level.prototype.generate = function() {
-    var levelProportion = this.height * 0.4;
+    var levelProportion = this.height * 0.01;
     this.border = new vec2(0, levelProportion);
-    for (var x = 0; x < this.width; x++) {
-        this.map[x] = [];
-        for (var y = 0; y < this.height; y++) {
-        	var rand = Math.random();
-            if(y > levelProportion) {
-            	if(y > levelProportion && y <= levelProportion + 1) {
-            		this.map[x][y] = 1;
-            	} else {
-            		if(rand > 0.1) {
-            			this.map[x][y] = 2;	
-            		} else {
-            			this.map[x][y] = 3;
-            		}
-            		
-            	}
+
+    for (var i = 0; i < this.width * this.height; i++) {
+        var x = i % this.width;
+        var y = Math.floor(i / this.width);
+        var rand = Math.random();
+        if (y > levelProportion) {
+            if (y > levelProportion && y <= levelProportion + 1) {
+                this.map[i] = 1;
             } else {
-            	this.map[x][y] = -1;
+                if (rand > 0.1) {
+                    this.map[i] = 2;
+                } else {
+                    this.map[i] = 3;
+                }
+
             }
+        } else {
+            this.map[i] = -1;
         }
-    }
-
-    this.map[2][10] = -1;
-    this.map[3][10] = -1;
-    this.map[3][9] = -1;
-    this.map[2][9] = -1;
-    this.map[2][5] = 1;
-
-
-    this.map[14][10] = -1;
-    this.map[15][10] = -1;
-    this.map[15][9] = -1;
-    this.map[14][9] = -1;
-    this.map[15][5] = 1;
-
-    this.map[5][8] = 1;
+    };
 };
 
 Level.prototype.bindRenderable = function(renderable) {
@@ -290,20 +276,24 @@ Level.prototype.isBlocked = function(position, size, shift) {
     var corrects = [];
 
     if (xStart < 0 || xEnd > this.width || yStart < 0)
-        return [[10, null]];
+        return [
+            [10, null]
+        ];
     for (var y = yStart; y < yEnd; y++) {
         for (var x = xStart; x < xEnd; x++) {
-            var fieldType = this.map[x][y];
+            var fieldType = this.map[y * this.width + x];
             if (fieldType > -1) corrects.push([fieldType, new aabb(x * this.tileW, y * this.tileH, x * this.tileW + this.tileW, y * this.tileH + this.tileH)]);
         }
     }
 
-    if(corrects.length === 0) {
-    	return [[-1, new aabb(x * this.tileW, y * this.tileH, x * this.tileW + this.tileW, y * this.tileH + this.tileH)]];	
+    if (corrects.length === 0) {
+        return [
+            [-1, new aabb(x * this.tileW, y * this.tileH, x * this.tileW + this.tileW, y * this.tileH + this.tileH)]
+        ];
     } else {
-    	return corrects;
+        return corrects;
     }
-    
+
 
 };
 
@@ -312,22 +302,22 @@ Level.prototype.initRenderable = function() {
         return false;
     }
 
-    for (var i = 0; i < this.map.length; i++) {
-        for (var j = 0; j < this.map[i].length; j++) {
-            var currTile = this.map[i][j];
-            if (currTile == 0) {
-                this.renderable.addQuad(i * this.tileW, j * this.tileH, this.tileW + 1, this.tileH + 1, 0, 0);
-            } else if (currTile == 1) {
-                this.renderable.addQuad(i * this.tileW, j * this.tileH, this.tileW + 1, this.tileH + 1, 1, 0);
-            } else if (currTile == 2) {
-                this.renderable.addQuad(i * this.tileW, j * this.tileH, this.tileW + 1, this.tileH + 1, 3, 0);
-            } else if (currTile == 3) {
-                this.renderable.addQuad(i * this.tileW, j * this.tileH, this.tileW + 1, this.tileH + 1, 5, 0);
-            };
+    for (var i = 0; i < this.width * this.height; i++) {
+
+        var x = i % this.width;
+        var y = Math.floor(i / this.width);
+        var currTile = this.map[i];
+
+        if (currTile == 0) {
+            this.renderable.addQuad(x * this.tileW, y * this.tileH, this.tileW + 1, this.tileH + 1, 0, 0);
+        } else if (currTile == 1) {
+            this.renderable.addQuad(x * this.tileW, y * this.tileH, this.tileW + 1, this.tileH + 1, 1, 0);
+        } else if (currTile == 2) {
+            this.renderable.addQuad(x * this.tileW, y * this.tileH, this.tileW + 1, this.tileH + 1, 3, 0);
+        } else if (currTile == 3) {
+            this.renderable.addQuad(x * this.tileW, y * this.tileH, this.tileW + 1, this.tileH + 1, 5, 0);
         };
     };
-
-
 
     this.renderable.initBuffers();
 };
@@ -362,7 +352,7 @@ function Player(position, screenPosition, size, collisionBox, shiftBy) {
     this.speed = new vec2(0.0, 0.0);
     this.size = size;
     this.collisionBox = collisionBox;
-    this.shift = new vec2(16, 128);
+    this.shift = new vec2(0, 0);
     
     this.aabb = new aabb(this.gamePosition.x + this.shift.x, this.gamePosition.y + this.shift.y, this.gamePosition.x + this.collisionBox.x, this.gamePosition.y + this.collisionBox.y);
     this.renderable = null;
@@ -472,12 +462,13 @@ Player.prototype.update = function(dt, keys, level) {
     }
 
 
-    if((this.gamePosition.y / level.tileH) < level.border.y - 2) {
-    	this.screenPosition.y = this.gamePosition.y;
-    };
+    // if((this.gamePosition.y / level.tileH) < level.border.y - 2) {
+    // 	this.screenPosition.y = this.gamePosition.y;
+    // };
 
     this.cameraPosition.x = this.gamePosition.x - this.screenPosition.x;
     this.cameraPosition.y = this.gamePosition.y - this.screenPosition.y;
+
 
     level.camera.offset.x = -this.cameraPosition.x;
     level.camera.offset.y = -this.cameraPosition.y;
@@ -518,7 +509,6 @@ function Renderable(gl, wrapProgram, program, tex) {
 
     this.attribs = {
         vertices: [],
-        number: 6,
         a_position: gl.getAttribLocation(this.program, 'a_position'),
         a_tilepos: gl.getAttribLocation(this.program, 'a_tilepos'),
         a_texcoord: gl.getAttribLocation(this.program, 'a_texcoord')
@@ -553,7 +543,7 @@ Renderable.prototype.addQuad = function(x, y, w, h, u, v) {
         this.attribs.vertices.push(base_quad[i]);
     };
 
-    this.offset++;
+    this.offset += 6;
 
 };
 
@@ -589,7 +579,7 @@ Renderable.prototype.render = function() {
     gl.enableVertexAttribArray(this.attribs.a_tilepos);
 
     //Render
-    gl.drawArrays(gl.TRIANGLES, 0, this.attribs["number"] * this.offset);
+    gl.drawArrays(gl.TRIANGLES, 0, this.offset);
 };
 
 Renderable.prototype.initUniforms = function() {
