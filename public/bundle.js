@@ -70,6 +70,8 @@ var gameLevel = null;
 var gamePlayer = null;
 
 var projectionMatrix = mat4.create();
+var program_sprite = null;
+var program_map = null;
 
 var test_sprite = null;
 var test_renderable = null;
@@ -83,27 +85,22 @@ function init() {
 
     gl = twgl.getWebGLContext(document.getElementById("c"));
     twgl.resizeCanvasToDisplaySize(gl.canvas);
-    // gl.canvas.width = 1200;
-    // gl.canvas.height = 800;
 
-    var program_sprite = twgl.createProgramInfo(gl, ["vs-sprite", "fs-sprite"]);
-    var program_map = twgl.createProgramInfo(gl, ["vs-map", "fs-map"]);
+    program_sprite = twgl.createProgramInfo(gl, ["vs-sprite", "fs-sprite"]);
+    program_map = twgl.createProgramInfo(gl, ["vs-map", "fs-map"]);
 
     loadAssets();
 
     mat4.ortho(projectionMatrix, 0.0, gl.canvas.width, gl.canvas.height, 0.0, 0.0, -100);
-    prepareUniform(program_sprite, program_map);
-
+    prepareUniform();
 
     gameLevel = new level(100, 100, 64, 64, gl.canvas.width, gl.canvas.height);
     gameLevel.generate();
     gameLevel.bindRenderable(new renderable(gl, program_map, program_map.program, textures.tilesheet));
     mat4.translate(gameLevel.renderable.translationMatrix, mat4.create(), [Math.round(gameLevel.camera.offset.x), Math.round(gameLevel.camera.offset.y), 0.0]);
 
-    gamePlayer = new player(new vec2(400.0, 0.0), new vec2(400.0, 300.0), new vec2(64, 128), new vec2(64, 128));
+    gamePlayer = new player(new vec2(gl.canvas.width * 0.5, 0.0), new vec2(gl.canvas.width * 0.5, 500.0), new vec2(64, 128), new vec2(64, 128));
     gamePlayer.bindRenderable(new renderable(gl, program_map, program_map.program, textures.player));
-
-
 
     requestAnimationFrame(gameLoop);
 };
@@ -137,7 +134,7 @@ function loadAssets() {
     });
 }
 
-function prepareUniform(program_sprite, program_map) {
+function prepareUniform() {
     //Init sprites
     gl.useProgram(program_sprite.program);
     var u_projection = gl.getUniformLocation(program_sprite.program, 'u_projection');
@@ -149,8 +146,6 @@ function prepareUniform(program_sprite, program_map) {
     var u_projection = gl.getUniformLocation(program_map.program, 'u_projection');
     gl.uniformMatrix4fv(u_projection, false, projectionMatrix);
 }
-
-
 
 var fps = 512,
     step = 1 / fps,
@@ -178,30 +173,34 @@ function gameLoop() {
     last = now;
 
     requestAnimationFrame(gameLoop);
-}
+};
 
-
-
-function render(dt) {
+function refreshContext() {
     twgl.resizeCanvasToDisplaySize(gl.canvas);
 
+    mat4.ortho(projectionMatrix, 0.0, gl.canvas.width, gl.canvas.height, 0.0, 0.0, -100);
+    
+    prepareUniform();
+
+    gameLevel.resizeScreen(gl.canvas.width, gl.canvas.height);
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
     gl.clearColor(0.0, 0.7, 0.8, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
     gl.enable(gl.DEPTH_TEST);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+};
+
+function render(dt) {    
+    refreshContext();
 
     gamePlayer.render();
     gameLevel.render();
-    
 };
 
-var poo = 0;
-
 function update(dt) {
-    poo += 1;
-
     gamePlayer.update(dt, currentlyPressed, gameLevel);
 
 };
@@ -237,7 +236,7 @@ function Level(w, h, tW, tH, wW, wH) {
 };
 
 Level.prototype.generate = function() {
-    var levelProportion = this.height * 0.01;
+    var levelProportion = this.height * 0.2;
     this.border = new vec2(0, levelProportion);
 
     for (var i = 0; i < this.width * this.height; i++) {
@@ -293,8 +292,11 @@ Level.prototype.isBlocked = function(position, size, shift) {
     } else {
         return corrects;
     }
+};
 
-
+Level.prototype.resizeScreen = function(w, h) {
+    this.windowW = w;
+    this.windowH = h;
 };
 
 Level.prototype.initRenderable = function() {
@@ -342,14 +344,12 @@ var renderable = require("./renderable.js");
 var vec2 = require("./vector2d.js");
 var aabb = require("./aabb");
 
-function Player(position, screenPosition, size, collisionBox, shiftBy) {
-    this.cameraPosition = position;
-    this.gamePosition = position.plus(new vec2(0, 0));
+function Player(gamePosition, screenPosition, size, collisionBox, shiftBy) {
+    this.cameraPosition = gamePosition;
+    this.gamePosition = gamePosition.plus(new vec2(0, 0));
     this.screenPosition = screenPosition.plus(new vec2(-size.x / 2, 0));
 
-    this.doubleJump = false;
-
-    this.speed = new vec2(400.0, 0.0);
+    this.speed = new vec2(0.0, 0.0);
     this.size = size;
     this.collisionBox = collisionBox;
     this.shift = new vec2(0, 0);
@@ -374,10 +374,14 @@ Player.prototype.initRenderable = function() {
     this.renderable.mapDimenX = 8;
     this.renderable.mapDimenY = 4;
     this.renderable.addQuad(0, 0, this.size.x, this.size.y, 0, 0);
+    for(var i = 0; i < 360; i++) {
+    	this.renderable.addQuad(Math.cos((i * 100) * (Math.PI / 180))*100, Math.sin((i*100) * (Math.PI / 180))*100, this.size.x, this.size.y, 0, 0);	
+    }
+    
     this.renderable.initBuffers();
 };
 
-var playerXSpeed = 300;
+var playerXSpeed = 2000;
 var gravity = 1000;
 var jumpSpeed = 510;
 
@@ -385,9 +389,9 @@ Player.prototype.moveX = function(dt, keys, level) {
     if (keys.left) this.speed.x = -playerXSpeed;
     if (keys.right) this.speed.x = playerXSpeed;
 
-    // if (!keys.left && !keys.right) {
-    //     this.speed.x = 0;
-    // }
+    if (!keys.left && !keys.right) {
+        this.speed.x = 0;
+    }
 
     var stepped = new vec2(this.speed.x * dt, 0);
     var newPos = this.gamePosition.plus(stepped);
@@ -451,30 +455,31 @@ Player.prototype.move = function(dt, keys, level) {
     this.moveY(dt, keys, level);
 
 };
+var tick = 0;
 
 Player.prototype.update = function(dt, keys, level) {
-    //If we escape the bounds of the level
+	tick+=0.01;
+   	//If we escape the bounds of the level
     if (this.gamePosition.x < level.windowW * 0.5 - this.size.x * 0.5) {
         this.screenPosition.x = this.gamePosition.x;
-    }
+    } else {
+    	this.screenPosition.x = level.windowW * 0.5 - this.size.x * 0.5;
+    };
+
     if (this.gamePosition.x > (level.width * level.tileW) - (level.windowW * 0.5 + this.size.x * 0.5)) {
         this.screenPosition.x = (this.gamePosition.x - ((level.width * level.tileW) - level.windowW));
     }
 
-
-    // if((this.gamePosition.y / level.tileH) < level.border.y - 2) {
-    // 	this.screenPosition.y = this.gamePosition.y;
-    // };
-
     this.cameraPosition.x = this.gamePosition.x - this.screenPosition.x;
     this.cameraPosition.y = this.gamePosition.y - this.screenPosition.y;
-
 
     level.camera.offset.x = -this.cameraPosition.x;
     level.camera.offset.y = -this.cameraPosition.y;
 
     mat4.translate(level.renderable.translationMatrix, mat4.create(), [Math.round(level.camera.offset.x), Math.round(level.camera.offset.y), 0.0]);
     mat4.translate(this.renderable.translationMatrix, mat4.create(), [Math.round(this.screenPosition.x), Math.round(this.screenPosition.y), 0.0]);
+
+    mat4.rotateZ(this.renderable.translationMatrix, this.renderable.translationMatrix, tick);
 
     this.move(dt, keys, level);
 };
@@ -496,11 +501,6 @@ function Renderable(gl, wrapProgram, program, tex) {
 
     this.mapDimenX = 8;
     this.mapDimenY = 8;
-
-    var x = 0;
-    var y = 0;
-    var w = 100;
-    var h = 100;
 
     this.offset = 0;
     this.program = program;
@@ -544,7 +544,6 @@ Renderable.prototype.addQuad = function(x, y, w, h, u, v) {
     };
 
     this.offset += 6;
-
 };
 
 Renderable.prototype.bind = function() {
