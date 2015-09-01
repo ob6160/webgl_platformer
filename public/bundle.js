@@ -178,7 +178,7 @@ function gameLoop() {
 function refreshContext() {
     twgl.resizeCanvasToDisplaySize(gl.canvas);
 
-    mat4.ortho(projectionMatrix, 0.0, gl.canvas.width, gl.canvas.height, 0.0, 0.0, -100);
+    mat4.ortho(projectionMatrix, 0.0, gl.canvas.width, gl.canvas.height, 0.0, 1000.0, -1000);
     
     prepareUniform();
 
@@ -458,7 +458,7 @@ Player.prototype.move = function(dt, keys, level) {
 var tick = 0;
 
 Player.prototype.update = function(dt, keys, level) {
-	tick+=0.01;
+	tick+=0.005;
    	//If we escape the bounds of the level
     if (this.gamePosition.x < level.windowW * 0.5 - this.size.x * 0.5) {
         this.screenPosition.x = this.gamePosition.x;
@@ -479,7 +479,9 @@ Player.prototype.update = function(dt, keys, level) {
     mat4.translate(level.renderable.translationMatrix, mat4.create(), [Math.round(level.camera.offset.x), Math.round(level.camera.offset.y), 0.0]);
     mat4.translate(this.renderable.translationMatrix, mat4.create(), [Math.round(this.screenPosition.x), Math.round(this.screenPosition.y), 0.0]);
 
-    mat4.rotateZ(this.renderable.translationMatrix, this.renderable.translationMatrix, tick);
+    mat4.rotateZ(this.renderable.translationMatrix, this.renderable.translationMatrix, Math.sin(tick));
+    mat4.rotateX(this.renderable.translationMatrix, this.renderable.translationMatrix, Math.cos(tick));
+    mat4.rotateY(this.renderable.translationMatrix, this.renderable.translationMatrix, Math.sin(tick));
 
     this.move(dt, keys, level);
 };
