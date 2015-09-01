@@ -62,7 +62,6 @@ var sprite = require("./sprite.js");
 var renderable = require("./renderable.js");
 var level = require("./level.js");
 var player = require("./player.js");
-var light = require("./light.js");
 
 var gl = null;
 var textures = null;
@@ -93,18 +92,17 @@ function init() {
     loadAssets();
 
     mat4.ortho(projectionMatrix, 0.0, gl.canvas.width, gl.canvas.height, 0.0, 0.0, -100);
+    
+    gameLevel = new level(2000, 100, 64, 64, gl.canvas.width, gl.canvas.height);
     prepareUniform();
-
-    gameLevel = new level(3000, 100, 64, 64, gl.canvas.width, gl.canvas.height);
+    
     gameLevel.generate();
     gameLevel.bindRenderable(new renderable(gl, program_map, program_map.program, textures.tilesheet));
-    mat4.translate(gameLevel.renderable.translationMatrix, mat4.create(), [Math.round(gameLevel.camera.offset.x), Math.round(gameLevel.camera.offset.y), 0.0]);
-
-    gamePlayer = new player(new vec2(gl.canvas.width * 0.5, 0.0), new vec2(gl.canvas.width * 0.5, 300.0), new vec2(64, 128), new vec2(64, 128));
+    
+    gamePlayer = new player(new vec2(gl.canvas.width * 0.5, 0.0), new vec2(gl.canvas.width * 0.5, 250.0), new vec2(64, 128), new vec2(64, 128));
     gamePlayer.bindRenderable(new renderable(gl, program_map, program_map.program, textures.player));
 
-    gameSun = new light(0, 0, 1000, 1);
-
+    
     requestAnimationFrame(gameLoop);
 };
 
@@ -147,6 +145,12 @@ function prepareUniform() {
     gl.useProgram(program_map.program);
     var u_projection = gl.getUniformLocation(program_map.program, 'u_projection');
     gl.uniformMatrix4fv(u_projection, false, projectionMatrix);
+
+    var u_sunlight = gl.getUniformLocation(program_map.program, 'u_sunlight');
+    gl.uniform4f(u_sunlight, gameLevel.gameLight.position.x, gameLevel.gameLight.position.y, gameLevel.gameLight.intensity, gameLevel.gameLight.colour);
+
+    // var u_leveloffset = gl.getUniformLocation(program_map.program, 'u_leveloffset');
+    // gl.uniform1f(u_leveloffset, gameLevel.levelProportion * 64 + 64);
 }
 
 var fps = 512,
@@ -198,7 +202,7 @@ function refreshContext() {
 function render(dt) {    
     refreshContext();
 
-    gamePlayer.render();
+    gamePlayer.render(gameLevel);
     gameLevel.render();
 };
 
@@ -208,13 +212,14 @@ function update(dt) {
 };
 
 module.exports.init = init;
-},{"./level.js":3,"./light.js":4,"./player.js":6,"./renderable.js":7,"./sprite.js":8,"./vector2d.js":9,"gl-matrix":10}],3:[function(require,module,exports){
+},{"./level.js":3,"./player.js":6,"./renderable.js":7,"./sprite.js":8,"./vector2d.js":9,"gl-matrix":10}],3:[function(require,module,exports){
 var twgl = window.twgl;
 
 var mat4 = require('gl-matrix').mat4;
 var vec3 = require('gl-matrix').vec3;
 var vec2 = require("./vector2d");
 var aabb = require("./aabb");
+var light = require("./light.js");
 
 var renderable = require("./renderable.js");
 
@@ -233,20 +238,24 @@ function Level(w, h, tW, tH, wW, wH) {
         offset: new vec2(0, 0)
     };
 
-    this.renderable = null;
+    this.gameLight = new light(this.windowW * 0.5, 0, 350, 1000);
 
+
+
+    this.renderable = null;
+    this.levelProportion = 0;
 };
 
 Level.prototype.generate = function() {
-    var levelProportion = this.height * 0.2;
-    this.border = new vec2(0, levelProportion);
+    this.levelProportion = this.height * 0.1;
+    this.border = new vec2(0, this.levelProportion);
 
     for (var i = 0; i < this.width * this.height; i++) {
         var x = i % this.width;
         var y = Math.floor(i / this.width);
         var rand = Math.random();
-        if (y > levelProportion) {
-            if (y > levelProportion && y <= levelProportion + 1) {
+        if (y > this.levelProportion) {
+            if (y > this.levelProportion && y <= this.levelProportion + 1) {
                 this.map[i] = 1;
             } else {
                 if (rand > 0.1) {
@@ -260,6 +269,17 @@ Level.prototype.generate = function() {
             this.map[i] = -1;
         }
     };
+
+    this.map[4 + 6 * this.width] = 1;
+    //this.map[4 + 10 * this.width] = 1;
+
+    this.map[4 + 11 * this.width] = -1;
+    this.map[4 + 12 * this.width] = -1;
+    this.map[4 + 13 * this.width] = -1;
+
+    this.map[5 + 11 * this.width] = -1;
+    this.map[5 + 12 * this.width] = -1;
+    this.map[5 + 13 * this.width] = -1;
 };
 
 Level.prototype.bindRenderable = function(renderable) {
@@ -327,12 +347,16 @@ Level.prototype.initRenderable = function() {
 };
 
 Level.prototype.render = function() {
-    this.renderable.render();
+    this.customUniforms = [
+        ["u_leveloffset", this.levelProportion * this.tileH + 64]
+    ];
+
+    this.renderable.render(this.customUniforms);
 };
 
 
 module.exports = Level;
-},{"./aabb":1,"./renderable.js":7,"./vector2d":9,"gl-matrix":10}],4:[function(require,module,exports){
+},{"./aabb":1,"./light.js":4,"./renderable.js":7,"./vector2d":9,"gl-matrix":10}],4:[function(require,module,exports){
 var vec2 = require("./vector2d");
 
 function Light(x, y, intensity, colour) {
@@ -365,7 +389,7 @@ function Player(gamePosition, screenPosition, size, collisionBox, shiftBy) {
     this.size = size;
     this.collisionBox = collisionBox;
     this.shift = new vec2(0, 0);
-    
+
     this.aabb = new aabb(this.gamePosition.x + this.shift.x, this.gamePosition.y + this.shift.y, this.gamePosition.x + this.collisionBox.x, this.gamePosition.y + this.collisionBox.y);
     this.renderable = null;
 };
@@ -389,9 +413,9 @@ Player.prototype.initRenderable = function() {
     this.renderable.initBuffers();
 };
 
-var playerXSpeed = 2000;
+var playerXSpeed = 500;
 var gravity = 1000;
-var jumpSpeed = 510;
+var jumpSpeed = 550;
 
 Player.prototype.moveX = function(dt, keys, level) {
     if (keys.left) this.speed.x = -playerXSpeed;
@@ -430,11 +454,11 @@ Player.prototype.moveY = function(dt, keys, level) {
     var newPos = this.gamePosition.plus(stepped);
     var obstacle = level.isBlocked(newPos, this.collisionBox, this.shift);
 
-    
+
     //console.log(this.speed.y);
     if (obstacle[0][0] > -1) {
         if (keys.up && this.speed.y > 0) {
-        	this.speed.y = -jumpSpeed;
+            this.speed.y = -jumpSpeed;
         } else {
             this.speed.y = 0;
         }
@@ -462,13 +486,14 @@ Player.prototype.move = function(dt, keys, level) {
     this.moveX(dt, keys, level);
     this.moveY(dt, keys, level);
 };
-
+var bob = 0;
 Player.prototype.update = function(dt, keys, level) {
-   	//If we escape the bounds of the level
+    bob++;
+    //If we escape the bounds of the level
     if (this.gamePosition.x < level.windowW * 0.5 - this.size.x * 0.5) {
         this.screenPosition.x = this.gamePosition.x;
     } else {
-    	this.screenPosition.x = level.windowW * 0.5 - this.size.x * 0.5;
+        this.screenPosition.x = level.windowW * 0.5 - this.size.x * 0.5;
     };
 
     if (this.gamePosition.x > (level.width * level.tileW) - (level.windowW * 0.5 + this.size.x * 0.5)) {
@@ -481,14 +506,20 @@ Player.prototype.update = function(dt, keys, level) {
     level.camera.offset.x = -this.cameraPosition.x;
     level.camera.offset.y = -this.cameraPosition.y;
 
+  //  level.gameLight.position.y = level.camera.offset.y + (this.gamePosition.y - this.screenPosition.y);
+
+
     mat4.translate(level.renderable.translationMatrix, mat4.create(), [Math.round(level.camera.offset.x), Math.round(level.camera.offset.y), 0.0]);
     mat4.translate(this.renderable.translationMatrix, mat4.create(), [Math.round(this.screenPosition.x), Math.round(this.screenPosition.y), 0.0]);
 
     this.move(dt, keys, level);
 };
 
-Player.prototype.render = function() {
-    this.renderable.render();
+Player.prototype.render = function(level) {
+    this.customUniforms = [
+        ["u_leveloffset", -1]
+    ];
+    this.renderable.render(this.customUniforms);
 };
 
 module.exports = Player;
@@ -515,10 +546,9 @@ function Renderable(gl, wrapProgram, program, tex) {
         a_position: gl.getAttribLocation(this.program, 'a_position'),
         a_tilepos: gl.getAttribLocation(this.program, 'a_tilepos'),
         a_texcoord: gl.getAttribLocation(this.program, 'a_texcoord')
-    }
+    };
 
-    this.x = 0;
-    this.y = 0;
+    this.translationMatrix = mat4.create();
 
     this.FSIZE = new Float32Array().BYTES_PER_ELEMENT;
 
@@ -553,22 +583,29 @@ Renderable.prototype.bind = function() {
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vertexBuffer)
 };
 
-Renderable.prototype.render = function() {
+Renderable.prototype.render = function(customUniforms) {
     var gl = this.gl;
+    customUniforms = customUniforms || [];
 
     gl.useProgram(this.program);
 
     //Bind buffer;
     this.bind(gl);
 
-    //Set uniforms
-    twgl.setUniforms(this.programWrap, {
+    var uniforms = {
         tex: this.texture,
         u_transform: this.translationMatrix,
         u_mapdimenx: this.mapDimenX,
         u_mapdimeny: this.mapDimenY,
         u_customtilepos: this.customtilepos
-    });
+    };
+
+    for(var i = 0; i < customUniforms.length; i++) {
+        uniforms[customUniforms[i][0]] = customUniforms[i][1];
+    };
+
+    //Set uniforms
+    twgl.setUniforms(this.programWrap, uniforms);
 
     //Set attributes
     gl.vertexAttribPointer(this.attribs.a_position, 2, gl.FLOAT, false, 6 * this.FSIZE, 0);
@@ -585,11 +622,11 @@ Renderable.prototype.render = function() {
 };
 
 Renderable.prototype.initUniforms = function() {
-    this.translationMatrix = mat4.create();
     twgl.setUniforms(this.programWrap, {
         tex: this.texture,
         u_transform: this.translationMatrix,
-        u_mapdimen: this.mapDimen,
+        u_mapdimenx: this.mapDimenX,
+        u_mapdimeny: this.mapDimenY,
         u_customtilepos: this.customtilepos
     });
 };
