@@ -100,7 +100,7 @@ function init() {
     gameLevel.bindRenderable(new renderable(gl, program_map, program_map.program, textures.tilesheet));
     mat4.translate(gameLevel.renderable.translationMatrix, mat4.create(), [Math.round(gameLevel.camera.offset.x), Math.round(gameLevel.camera.offset.y), 0.0]);
 
-    gamePlayer = new player(new vec2(400.0, 0.0), new vec2(400.0, 300.0), new vec2(16, 32), new vec2(16, 32));
+    gamePlayer = new player(new vec2(400.0, 0.0), new vec2(400.0, 300.0), new vec2(64, 128), new vec2(64, 128));
     gamePlayer.bindRenderable(new renderable(gl, program_map, program_map.program, textures.player));
 
 
@@ -349,7 +349,7 @@ function Player(position, screenPosition, size, collisionBox, shiftBy) {
 
     this.doubleJump = false;
 
-    this.speed = new vec2(0.0, 0.0);
+    this.speed = new vec2(400.0, 0.0);
     this.size = size;
     this.collisionBox = collisionBox;
     this.shift = new vec2(0, 0);
@@ -385,9 +385,9 @@ Player.prototype.moveX = function(dt, keys, level) {
     if (keys.left) this.speed.x = -playerXSpeed;
     if (keys.right) this.speed.x = playerXSpeed;
 
-    if (!keys.left && !keys.right) {
-        this.speed.x = 0;
-    }
+    // if (!keys.left && !keys.right) {
+    //     this.speed.x = 0;
+    // }
 
     var stepped = new vec2(this.speed.x * dt, 0);
     var newPos = this.gamePosition.plus(stepped);
