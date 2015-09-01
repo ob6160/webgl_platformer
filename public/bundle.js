@@ -51,7 +51,7 @@ AABB.prototype.resolveOverlap = function(comparison) {
 };
 
 module.exports = AABB;
-},{"./vector2d":8}],2:[function(require,module,exports){
+},{"./vector2d":9}],2:[function(require,module,exports){
 //Main entry point into game.
 var twgl = window.twgl;
 var mat4 = require('gl-matrix').mat4;
@@ -62,12 +62,14 @@ var sprite = require("./sprite.js");
 var renderable = require("./renderable.js");
 var level = require("./level.js");
 var player = require("./player.js");
+var light = require("./light.js");
 
 var gl = null;
 var textures = null;
 
 var gameLevel = null;
 var gamePlayer = null;
+var gameSun = null;
 
 var projectionMatrix = mat4.create();
 var program_sprite = null;
@@ -75,7 +77,6 @@ var program_map = null;
 
 var test_sprite = null;
 var test_renderable = null;
-
 
 var arrowCodes = {37: "left", 38: "up", 39: "right"};
 var currentlyPressed = null;
@@ -94,17 +95,18 @@ function init() {
     mat4.ortho(projectionMatrix, 0.0, gl.canvas.width, gl.canvas.height, 0.0, 0.0, -100);
     prepareUniform();
 
-    gameLevel = new level(100, 100, 64, 64, gl.canvas.width, gl.canvas.height);
+    gameLevel = new level(3000, 100, 64, 64, gl.canvas.width, gl.canvas.height);
     gameLevel.generate();
     gameLevel.bindRenderable(new renderable(gl, program_map, program_map.program, textures.tilesheet));
     mat4.translate(gameLevel.renderable.translationMatrix, mat4.create(), [Math.round(gameLevel.camera.offset.x), Math.round(gameLevel.camera.offset.y), 0.0]);
 
-    gamePlayer = new player(new vec2(gl.canvas.width * 0.5, 0.0), new vec2(gl.canvas.width * 0.5, 500.0), new vec2(64, 128), new vec2(64, 128));
+    gamePlayer = new player(new vec2(gl.canvas.width * 0.5, 0.0), new vec2(gl.canvas.width * 0.5, 300.0), new vec2(64, 128), new vec2(64, 128));
     gamePlayer.bindRenderable(new renderable(gl, program_map, program_map.program, textures.player));
+
+    gameSun = new light(0, 0, 1000, 1);
 
     requestAnimationFrame(gameLoop);
 };
-
 
 function trackKeys(codes) {
   var pressed = Object.create(null);
@@ -124,7 +126,7 @@ function trackKeys(codes) {
 function loadAssets() {
     textures = twgl.createTextures(gl, {
         tilesheet: {
-            src: "images/tilesheet.png",
+            src: "images/tilesheet2.png",
             mag: gl.NEAREST
         },
         player: {
@@ -206,7 +208,7 @@ function update(dt) {
 };
 
 module.exports.init = init;
-},{"./level.js":3,"./player.js":5,"./renderable.js":6,"./sprite.js":7,"./vector2d.js":8,"gl-matrix":9}],3:[function(require,module,exports){
+},{"./level.js":3,"./light.js":4,"./player.js":6,"./renderable.js":7,"./sprite.js":8,"./vector2d.js":9,"gl-matrix":10}],3:[function(require,module,exports){
 var twgl = window.twgl;
 
 var mat4 = require('gl-matrix').mat4;
@@ -330,11 +332,21 @@ Level.prototype.render = function() {
 
 
 module.exports = Level;
-},{"./aabb":1,"./renderable.js":6,"./vector2d":8,"gl-matrix":9}],4:[function(require,module,exports){
+},{"./aabb":1,"./renderable.js":7,"./vector2d":9,"gl-matrix":10}],4:[function(require,module,exports){
+var vec2 = require("./vector2d");
+
+function Light(x, y, intensity, colour) {
+	this.position = new vec2(x, y);
+	this.intensity = intensity;
+	this.colour = colour;
+};
+
+module.exports = Light;
+},{"./vector2d":9}],5:[function(require,module,exports){
 var game = require("./game.js");
 
 game.init();
-},{"./game.js":2}],5:[function(require,module,exports){
+},{"./game.js":2}],6:[function(require,module,exports){
 var twgl = window.twgl;
 
 var mat4 = require('gl-matrix').mat4;
@@ -374,10 +386,6 @@ Player.prototype.initRenderable = function() {
     this.renderable.mapDimenX = 8;
     this.renderable.mapDimenY = 4;
     this.renderable.addQuad(0, 0, this.size.x, this.size.y, 0, 0);
-    for(var i = 0; i < 360; i++) {
-    	this.renderable.addQuad(Math.cos((i * 100) * (Math.PI / 180))*100, Math.sin((i*100) * (Math.PI / 180))*100, this.size.x, this.size.y, 0, 0);	
-    }
-    
     this.renderable.initBuffers();
 };
 
@@ -453,12 +461,9 @@ Player.prototype.moveY = function(dt, keys, level) {
 Player.prototype.move = function(dt, keys, level) {
     this.moveX(dt, keys, level);
     this.moveY(dt, keys, level);
-
 };
-var tick = 0;
 
 Player.prototype.update = function(dt, keys, level) {
-	tick+=0.005;
    	//If we escape the bounds of the level
     if (this.gamePosition.x < level.windowW * 0.5 - this.size.x * 0.5) {
         this.screenPosition.x = this.gamePosition.x;
@@ -479,10 +484,6 @@ Player.prototype.update = function(dt, keys, level) {
     mat4.translate(level.renderable.translationMatrix, mat4.create(), [Math.round(level.camera.offset.x), Math.round(level.camera.offset.y), 0.0]);
     mat4.translate(this.renderable.translationMatrix, mat4.create(), [Math.round(this.screenPosition.x), Math.round(this.screenPosition.y), 0.0]);
 
-    mat4.rotateZ(this.renderable.translationMatrix, this.renderable.translationMatrix, Math.sin(tick));
-    mat4.rotateX(this.renderable.translationMatrix, this.renderable.translationMatrix, Math.cos(tick));
-    mat4.rotateY(this.renderable.translationMatrix, this.renderable.translationMatrix, Math.sin(tick));
-
     this.move(dt, keys, level);
 };
 
@@ -491,7 +492,7 @@ Player.prototype.render = function() {
 };
 
 module.exports = Player;
-},{"./aabb":1,"./renderable.js":6,"./vector2d.js":8,"gl-matrix":9}],6:[function(require,module,exports){
+},{"./aabb":1,"./renderable.js":7,"./vector2d.js":9,"gl-matrix":10}],7:[function(require,module,exports){
 var twgl = window.twgl;
 var mat4 = require('gl-matrix').mat4;
 var vec3 = require('gl-matrix').vec3;
@@ -607,7 +608,7 @@ Renderable.prototype.initBuffers = function() {
 
 
 module.exports = Renderable;
-},{"gl-matrix":9}],7:[function(require,module,exports){
+},{"gl-matrix":10}],8:[function(require,module,exports){
 var twgl = window.twgl;
 
 var mat4 = require('gl-matrix').mat4;
@@ -704,7 +705,7 @@ Sprite.prototype.initBuffers = function() {
 
 
 module.exports = Sprite;
-},{"gl-matrix":9}],8:[function(require,module,exports){
+},{"gl-matrix":10}],9:[function(require,module,exports){
 function Vector(x, y) {
   this.x = x; this.y = y;
 }
@@ -716,7 +717,7 @@ Vector.prototype.times = function(factor) {
 };
 
 module.exports = Vector;
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 /**
  * @fileoverview gl-matrix - High performance matrix and vector operations
  * @author Brandon Jones
@@ -754,7 +755,7 @@ exports.quat = require("./gl-matrix/quat.js");
 exports.vec2 = require("./gl-matrix/vec2.js");
 exports.vec3 = require("./gl-matrix/vec3.js");
 exports.vec4 = require("./gl-matrix/vec4.js");
-},{"./gl-matrix/common.js":10,"./gl-matrix/mat2.js":11,"./gl-matrix/mat2d.js":12,"./gl-matrix/mat3.js":13,"./gl-matrix/mat4.js":14,"./gl-matrix/quat.js":15,"./gl-matrix/vec2.js":16,"./gl-matrix/vec3.js":17,"./gl-matrix/vec4.js":18}],10:[function(require,module,exports){
+},{"./gl-matrix/common.js":11,"./gl-matrix/mat2.js":12,"./gl-matrix/mat2d.js":13,"./gl-matrix/mat3.js":14,"./gl-matrix/mat4.js":15,"./gl-matrix/quat.js":16,"./gl-matrix/vec2.js":17,"./gl-matrix/vec3.js":18,"./gl-matrix/vec4.js":19}],11:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -808,7 +809,7 @@ glMatrix.toRadian = function(a){
 
 module.exports = glMatrix;
 
-},{}],11:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -1112,7 +1113,7 @@ mat2.LDU = function (L, D, U, a) {
 
 module.exports = mat2;
 
-},{"./common.js":10}],12:[function(require,module,exports){
+},{"./common.js":11}],13:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -1431,7 +1432,7 @@ mat2d.frob = function (a) {
 
 module.exports = mat2d;
 
-},{"./common.js":10}],13:[function(require,module,exports){
+},{"./common.js":11}],14:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -1998,7 +1999,7 @@ mat3.frob = function (a) {
 
 module.exports = mat3;
 
-},{"./common.js":10}],14:[function(require,module,exports){
+},{"./common.js":11}],15:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -3283,7 +3284,7 @@ mat4.frob = function (a) {
 
 module.exports = mat4;
 
-},{"./common.js":10}],15:[function(require,module,exports){
+},{"./common.js":11}],16:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -3838,7 +3839,7 @@ quat.str = function (a) {
 
 module.exports = quat;
 
-},{"./common.js":10,"./mat3.js":13,"./vec3.js":17,"./vec4.js":18}],16:[function(require,module,exports){
+},{"./common.js":11,"./mat3.js":14,"./vec3.js":18,"./vec4.js":19}],17:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -4363,7 +4364,7 @@ vec2.str = function (a) {
 
 module.exports = vec2;
 
-},{"./common.js":10}],17:[function(require,module,exports){
+},{"./common.js":11}],18:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -5074,7 +5075,7 @@ vec3.str = function (a) {
 
 module.exports = vec3;
 
-},{"./common.js":10}],18:[function(require,module,exports){
+},{"./common.js":11}],19:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -5613,4 +5614,4 @@ vec4.str = function (a) {
 
 module.exports = vec4;
 
-},{"./common.js":10}]},{},[4]);
+},{"./common.js":11}]},{},[5]);
