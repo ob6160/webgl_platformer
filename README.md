@@ -2,6 +2,7 @@
 Originally a game for ld, now a platform game engine made with webgl. Totally rad.
 
 ![Image of rad Monster Graphic](http://i.imgur.com/4dMgfNY.png)
+![Image of radical new lighting engine](http://i.imgur.com/z8iBM1U.png)
 
 :city_sunset::saxophone::notes:
 
