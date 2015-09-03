@@ -69,6 +69,7 @@ var textures = null;
 var gameLevel = null;
 var gamePlayer = null;
 var gameSun = null;
+var gameBackground = null;
 
 var projectionMatrix = mat4.create();
 var program_sprite = null;
@@ -92,16 +93,22 @@ function init() {
     loadAssets();
 
     mat4.ortho(projectionMatrix, 0.0, gl.canvas.width, gl.canvas.height, 0.0, 0.0, -100);
-    
+
     gameLevel = new level(2000, 100, 64, 64, gl.canvas.width, gl.canvas.height);
-    prepareUniform();
-    
+    gamePlayer = new player(new vec2(gl.canvas.width * 0.5, 0.0), new vec2(gl.canvas.width * 0.5, 450.0), new vec2(64, 128), new vec2(64, 128));
+
     gameLevel.generate();
-    gameLevel.bindRenderable(new renderable(gl, program_map, program_map.program, textures.tilesheet));
+
+    prepareUniform();
+   
+    gl.useProgram(program_map.program);
     
-    gamePlayer = new player(new vec2(gl.canvas.width * 0.5, 0.0), new vec2(gl.canvas.width * 0.5, 250.0), new vec2(64, 128), new vec2(64, 128));
+    gameLevel.bindRenderable(new renderable(gl, program_map, program_map.program, textures.tilesheet));
     gamePlayer.bindRenderable(new renderable(gl, program_map, program_map.program, textures.player));
 
+    gl.useProgram(program_sprite.program);
+
+    gameBackground = new sprite(gl, program_sprite, program_sprite.program, textures.background, 0, 0, gl.canvas.width, 1024);
     
     requestAnimationFrame(gameLoop);
 };
@@ -124,11 +131,15 @@ function trackKeys(codes) {
 function loadAssets() {
     textures = twgl.createTextures(gl, {
         tilesheet: {
-            src: "images/tilesheet2.png",
+            src: "images/tilesheet.png",
             mag: gl.NEAREST
         },
         player: {
             src: "images/player.png",
+            mag: gl.NEAREST
+        },
+        background: {
+            src: "images/1.png",
             mag: gl.NEAREST
         }
     });
@@ -148,9 +159,6 @@ function prepareUniform() {
 
     var u_sunlight = gl.getUniformLocation(program_map.program, 'u_sunlight');
     gl.uniform4f(u_sunlight, gameLevel.gameLight.position.x, gameLevel.gameLight.position.y, gameLevel.gameLight.intensity, gameLevel.gameLight.colour);
-
-    // var u_leveloffset = gl.getUniformLocation(program_map.program, 'u_leveloffset');
-    // gl.uniform1f(u_leveloffset, gameLevel.levelProportion * 64 + 64);
 }
 
 var fps = 512,
@@ -202,13 +210,16 @@ function refreshContext() {
 function render(dt) {    
     refreshContext();
 
+    //gl.useProgram(program_map.program);
     gamePlayer.render(gameLevel);
     gameLevel.render();
+    gameBackground.render();
 };
 
 function update(dt) {
     gamePlayer.update(dt, currentlyPressed, gameLevel);
-
+    gameBackground.texOffset.x = gamePlayer.gamePosition.x / 10000.0;
+    gameBackground.texOffset.y = gamePlayer.gamePosition.y / 10000.0;
 };
 
 module.exports.init = init;
@@ -238,9 +249,7 @@ function Level(w, h, tW, tH, wW, wH) {
         offset: new vec2(0, 0)
     };
 
-    this.gameLight = new light(this.windowW * 0.5, 0, 350, 1000);
-
-
+    this.gameLight = new light(this.windowW * 0.5, 0, 450, 1000);
 
     this.renderable = null;
     this.levelProportion = 0;
@@ -298,8 +307,9 @@ Level.prototype.isBlocked = function(position, size, shift) {
 
     if (xStart < 0 || xEnd > this.width || yStart < 0)
         return [
-            [10, null]
+            [0, null]
         ];
+
     for (var y = yStart; y < yEnd; y++) {
         for (var x = xStart; x < xEnd; x++) {
             var fieldType = this.map[y * this.width + x];
@@ -506,9 +516,6 @@ Player.prototype.update = function(dt, keys, level) {
     level.camera.offset.x = -this.cameraPosition.x;
     level.camera.offset.y = -this.cameraPosition.y;
 
-  //  level.gameLight.position.y = level.camera.offset.y + (this.gamePosition.y - this.screenPosition.y);
-
-
     mat4.translate(level.renderable.translationMatrix, mat4.create(), [Math.round(level.camera.offset.x), Math.round(level.camera.offset.y), 0.0]);
     mat4.translate(this.renderable.translationMatrix, mat4.create(), [Math.round(this.screenPosition.x), Math.round(this.screenPosition.y), 0.0]);
 
@@ -651,16 +658,13 @@ var twgl = window.twgl;
 var mat4 = require('gl-matrix').mat4;
 var vec3 = require('gl-matrix').vec3;
 
-function Sprite(gl, wrapProgram, program, tex) {
+var vec2 = require("./vector2d");
+
+function Sprite(gl, wrapProgram, program, tex, x, y, w, h) {
     this.vertexBuffer = null;
     this.texture = tex;
     this.translationMatrix = null;
-
-    var x = 0;
-    var y = 0;
-    var w = 100;
-    var h = 100;
-
+    
     this.program = program;
     this.programWrap = wrapProgram;
     this.gl = gl;
@@ -678,6 +682,8 @@ function Sprite(gl, wrapProgram, program, tex) {
         a_position: gl.getAttribLocation(this.program, 'a_position'),
         a_texcoord: gl.getAttribLocation(this.program, 'a_texcoord')
     }
+
+    this.texOffset = new vec2(0.0, 0.0);
 
     this.FSIZE = this.attribs.vertices.BYTES_PER_ELEMENT;
 
@@ -697,13 +703,17 @@ Sprite.prototype.bind = function() {
 Sprite.prototype.render = function() {
     var gl = this.gl;
 
+
+    gl.useProgram(this.program);
     //Bind buffer;
     this.bind(gl);
 
     //Set uniforms
     twgl.setUniforms(this.programWrap, {
         tex: this.texture,
-        u_transform: this.translationMatrix
+        u_transform: this.translationMatrix,
+        u_texoffsetx: this.texOffset.x,
+        u_texoffsety: this.texOffset.y
     });
 
     //Set attributes
@@ -742,7 +752,7 @@ Sprite.prototype.initBuffers = function() {
 
 
 module.exports = Sprite;
-},{"gl-matrix":10}],9:[function(require,module,exports){
+},{"./vector2d":9,"gl-matrix":10}],9:[function(require,module,exports){
 function Vector(x, y) {
   this.x = x; this.y = y;
 }

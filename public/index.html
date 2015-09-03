@@ -53,7 +53,7 @@
 			varying vec2 v_texcoord;
 			varying vec4 v_pos;
 
-			vec4 baseLight = vec4(0.9, 0.9, 1.0, 1.0);
+			vec4 baseLight = vec4(0.9, 0.8, 1.0, 1.0);
 
 			float scaleX = 1.0 / u_mapdimenx;
 			float scaleY = 1.0 / u_mapdimeny;
@@ -69,14 +69,10 @@
 				// 	lightMod *= pow;
 				// }
 
-				vec4 light = u_sunlight;
-				
 				if(u_leveloffset > -1.0 && (floor((v_pos.y) / 16.0) * 16.0 - u_leveloffset) > 0.0) {
-					// float dist = distance(vec2(light.x, light.y), vec2(floor((v_pos.x) / 32.0)*32.0, floor((v_pos.y) / 32.0) * 32.0  - u_leveloffset));
-					float dist = abs(light.y - (floor((v_pos.y) / 16.0) * 16.0 - u_leveloffset));
-
-					float pow = dist / light.z;
-
+					//float dist = distance(vec2(u_sunlight.x, u_sunlight.y), vec2(floor((v_pos.x) / 32.0)*32.0, floor((v_pos.y) / 32.0) * 32.0  - u_leveloffset));
+					float dist = abs(u_sunlight.y - (floor((v_pos.y) / 16.0) * 16.0 - u_leveloffset));
+					float pow = dist / u_sunlight.z;
 					lightMod *= pow;	
 				} else {
 					lightMod = 0.0;
@@ -113,12 +109,14 @@
 			precision mediump float;
 
 			uniform sampler2D tex;
+			uniform float u_texoffsetx;
+			uniform float u_texoffsety;
 			
 			varying vec2 v_texcoord;
 
 
 			void main() {
-				vec4 img = texture2D(tex, v_texcoord);
+				vec4 img = texture2D(tex, vec2(v_texcoord.x + u_texoffsetx, v_texcoord.y + u_texoffsety));
 		
 				if(img.a < 0.1) {
 					discard;
