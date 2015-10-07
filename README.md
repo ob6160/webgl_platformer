@@ -1,4 +1,6 @@
 # webgl_platformer
+
+(I might be livestreaming dev here: https://www.livecoding.tv/lyathon/)
 Originally a game for ld, now a platform game engine made with webgl. Totally rad.
 
 ![Image of rad Monster Graphic](http://i.imgur.com/4dMgfNY.png)
