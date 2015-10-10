@@ -70,8 +70,8 @@
 				// }
 
 				if(u_leveloffset > -1.0 && (floor((v_pos.y) / 16.0) * 16.0 - u_leveloffset) > 0.0) {
-					//float dist = distance(vec2(u_sunlight.x, u_sunlight.y), vec2(floor((v_pos.x) / 32.0)*32.0, floor((v_pos.y) / 32.0) * 32.0  - u_leveloffset));
-					float dist = abs(u_sunlight.y - (floor((v_pos.y) / 16.0) * 16.0 - u_leveloffset));
+					float dist = distance(vec2(u_sunlight.x, u_sunlight.y), vec2(floor((v_pos.x) / 32.0)*32.0, floor((v_pos.y) / 32.0) * 32.0  - u_leveloffset));
+					//float dist = abs(u_sunlight.y - (floor((v_pos.y) / 16.0) * 16.0 - u_leveloffset));
 					float pow = dist / u_sunlight.z;
 					lightMod *= pow;	
 				} else {

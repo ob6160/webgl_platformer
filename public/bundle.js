@@ -13,11 +13,14 @@ AABB.prototype.doesOverlap = function(comparison) {
     if (!(comparison instanceof AABB)) {
         return false;
     }
-    
-    if (this.pos1.x <= comparison.pos.x || this.pos.x >= comparison.pos1.x)
+
+    if (this.pos1.x <= comparison.pos.x || this.pos.x >= comparison.pos1.x) {
         return false;
-    if (this.pos1.y <= comparison.pos.y || this.pos.y >= comparison.pos1.y)
+    };
+
+    if (this.pos1.y <= comparison.pos.y || this.pos.y >= comparison.pos1.y) {
         return false;
+    };
 
     return true;
 };
@@ -27,31 +30,35 @@ AABB.prototype.resolveOverlap = function(comparison) {
     var right = this.pos1.x - comparison.pos.x;
     var top = this.pos.y - comparison.pos1.y;
     var bottom = this.pos1.y - comparison.pos.y;
-    var res = new vec2(0, 0);
+    var resolvedVector = new vec2(0, 0);
 
-    if ((left > 0 || right < 0) || (top > 0 || bottom < 0))
-        return res;
+    if ((left > 0 || right < 0) || (top > 0 || bottom < 0)) {
+        return resolvedVector;
+    };
 
-    if (Math.abs(left) < right)
-        res.x = left;
-    else
-        res.x = right;
+    if (Math.abs(left) < right) {
+        resolvedVector.x = left;
+    } else {
+        resolvedVector.x = right;
+    };
 
-    if (Math.abs(top) < bottom)
-        res.y = top;
-    else
-        res.y = bottom;
+    if (Math.abs(top) < bottom) {
+        resolvedVector.y = top;
+    } else {
+        resolvedVector.y = bottom;
+    };
 
-    if (Math.abs(res.x) < Math.abs(res.y))
-        res.y = 0;
-    else
-        res.x = 0;
+    if (Math.abs(resolvedVector.x) < Math.abs(resolvedVector.y)) {
+        resolvedVector.y = 0;
+    } else {
+        resolvedVector.x = 0;
+    };
 
-    return res;
+    return resolvedVector;
 };
 
 module.exports = AABB;
-},{"./vector2d":9}],2:[function(require,module,exports){
+},{"./vector2d":10}],2:[function(require,module,exports){
 //Main entry point into game.
 var twgl = window.twgl;
 var mat4 = require('gl-matrix').mat4;
@@ -62,6 +69,8 @@ var sprite = require("./sprite.js");
 var renderable = require("./renderable.js");
 var level = require("./level.js");
 var player = require("./player.js");
+var i = require("./input.js");
+var input = new i();
 
 var gl = null;
 var textures = null;
@@ -78,53 +87,57 @@ var program_map = null;
 var test_sprite = null;
 var test_renderable = null;
 
-var arrowCodes = {37: "left", 38: "up", 39: "right"};
 var currentlyPressed = null;
+var arrowCodes = {
+    37: "left",
+    38: "up",
+    39: "right"
+};
+
 
 function init() {
-    currentlyPressed = trackKeys(arrowCodes);
+    initGL();
 
-    gl = twgl.getWebGLContext(document.getElementById("c"));
-    twgl.resizeCanvasToDisplaySize(gl.canvas);
-
-    program_sprite = twgl.createProgramInfo(gl, ["vs-sprite", "fs-sprite"]);
-    program_map = twgl.createProgramInfo(gl, ["vs-map", "fs-map"]);
+    initIO();
 
     loadAssets();
 
-    mat4.ortho(projectionMatrix, 0.0, gl.canvas.width, gl.canvas.height, 0.0, 0.0, -100);
-
-    gameLevel = new level(2000, 100, 64, 64, gl.canvas.width, gl.canvas.height);
-    gamePlayer = new player(new vec2(gl.canvas.width * 0.5, 0.0), new vec2(gl.canvas.width * 0.5, 450.0), new vec2(64, 128), new vec2(64, 128));
-
-    gameLevel.generate();
+    initScene();
 
     prepareUniform();
-   
-    gl.useProgram(program_map.program);
-    
-    gameLevel.bindRenderable(new renderable(gl, program_map, program_map.program, textures.tilesheet));
-    gamePlayer.bindRenderable(new renderable(gl, program_map, program_map.program, textures.player));
 
-    gl.useProgram(program_sprite.program);
-
-    gameBackground = new sprite(gl, program_sprite, program_sprite.program, textures.background, 0, 0, gl.canvas.width, 1024);
-    
     requestAnimationFrame(gameLoop);
 };
 
-function trackKeys(codes) {
-  var pressed = Object.create(null);
-  function handler(event) {
-    if (codes.hasOwnProperty(event.keyCode)) {
-      var down = event.type == "keydown";
-      pressed[codes[event.keyCode]] = down;
-      event.preventDefault();
-    }
-  }
-  addEventListener("keydown", handler);
-  addEventListener("keyup", handler);
-  return pressed;
+function initIO() {
+    //Setup keyboard
+    currentlyPressed = input.trackKeys(arrowCodes);
+    
+};
+
+function initGL() {
+    //Context
+    gl = twgl.getWebGLContext(document.getElementById("c"));
+    twgl.resizeCanvasToDisplaySize(gl.canvas);
+
+    //Shaders
+    program_sprite = twgl.createProgramInfo(gl, ["vs-sprite", "fs-sprite"]);
+    program_map = twgl.createProgramInfo(gl, ["vs-map", "fs-map"]);
+};
+
+function initScene() {
+    //Setup projection matrix
+    mat4.ortho(projectionMatrix, 0.0, gl.canvas.width, gl.canvas.height, 0.0, 0.0, -1000);
+
+    //Init level & player
+    gameLevel = new level(2000, 100, 64, 64, gl.canvas.width, gl.canvas.height);
+    gamePlayer = new player(new vec2(gl.canvas.width * 0.5, 0.0), new vec2(gl.canvas.width * 0.5, 450.0), new vec2(64, 128), new vec2(64, 128));
+    gameBackground = new sprite(gl, program_sprite, program_sprite.program, textures.background, 0, 0, gl.canvas.width, 1024);
+    //Generate level
+    gameLevel.generate();
+
+    gameLevel.bindRenderable(new renderable(gl, program_map, program_map.program, textures.tilesheet));
+    gamePlayer.bindRenderable(new renderable(gl, program_map, program_map.program, textures.player));
 }
 
 
@@ -151,7 +164,6 @@ function prepareUniform() {
     var u_projection = gl.getUniformLocation(program_sprite.program, 'u_projection');
     gl.uniformMatrix4fv(u_projection, false, projectionMatrix);
 
-
     //Init map
     gl.useProgram(program_map.program);
     var u_projection = gl.getUniformLocation(program_map.program, 'u_projection');
@@ -159,6 +171,8 @@ function prepareUniform() {
 
     var u_sunlight = gl.getUniformLocation(program_map.program, 'u_sunlight');
     gl.uniform4f(u_sunlight, gameLevel.gameLight.position.x, gameLevel.gameLight.position.y, gameLevel.gameLight.intensity, gameLevel.gameLight.colour);
+
+
 }
 
 var fps = 512,
@@ -175,9 +189,9 @@ function timestamp() {
 
 function gameLoop() {
     now = timestamp();
-    
+
     dt = dt + Math.min(1, (now - last) / 1000);
-    
+
     while (dt > step) {
         dt = dt - step;
         update(step);
@@ -191,26 +205,24 @@ function gameLoop() {
 
 function refreshContext() {
     twgl.resizeCanvasToDisplaySize(gl.canvas);
-
+    gameLevel.resizeScreen(gl.canvas.width, gl.canvas.height);
+    
     mat4.ortho(projectionMatrix, 0.0, gl.canvas.width, gl.canvas.height, 0.0, 1000.0, -1000);
     
     prepareUniform();
 
-    gameLevel.resizeScreen(gl.canvas.width, gl.canvas.height);
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
 
     gl.clearColor(0.0, 0.7, 0.8, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
     gl.enable(gl.DEPTH_TEST);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 };
 
-function render(dt) {    
+function render(dt) {
+   
     refreshContext();
-
-    //gl.useProgram(program_map.program);
     gamePlayer.render(gameLevel);
     gameLevel.render();
     gameBackground.render();
@@ -219,11 +231,30 @@ function render(dt) {
 function update(dt) {
     gamePlayer.update(dt, currentlyPressed, gameLevel);
     gameBackground.texOffset.x = gamePlayer.gamePosition.x / 10000.0;
-    gameBackground.texOffset.y = gamePlayer.gamePosition.y / 10000.0;
 };
 
 module.exports.init = init;
-},{"./level.js":3,"./player.js":6,"./renderable.js":7,"./sprite.js":8,"./vector2d.js":9,"gl-matrix":10}],3:[function(require,module,exports){
+},{"./input.js":3,"./level.js":4,"./player.js":7,"./renderable.js":8,"./sprite.js":9,"./vector2d.js":10,"gl-matrix":11}],3:[function(require,module,exports){
+function InputHandler() {
+  
+};
+
+InputHandler.prototype.trackKeys = function(codes) {
+  var pressed = Object.create(null);
+  function handler(event) {
+    if (codes.hasOwnProperty(event.keyCode)) {
+      var down = event.type == "keydown";
+      pressed[codes[event.keyCode]] = down;
+      event.preventDefault();
+    }
+  }
+  addEventListener("keydown", handler);
+  addEventListener("keyup", handler);
+  return pressed;
+};
+
+module.exports = InputHandler;
+},{}],4:[function(require,module,exports){
 var twgl = window.twgl;
 
 var mat4 = require('gl-matrix').mat4;
@@ -249,7 +280,7 @@ function Level(w, h, tW, tH, wW, wH) {
         offset: new vec2(0, 0)
     };
 
-    this.gameLight = new light(this.windowW * 0.5, 0, 450, 1000);
+    this.gameLight = new light(this.windowW * 0.5, 0, 950, 1000);
 
     this.renderable = null;
     this.levelProportion = 0;
@@ -366,7 +397,7 @@ Level.prototype.render = function() {
 
 
 module.exports = Level;
-},{"./aabb":1,"./light.js":4,"./renderable.js":7,"./vector2d":9,"gl-matrix":10}],4:[function(require,module,exports){
+},{"./aabb":1,"./light.js":5,"./renderable.js":8,"./vector2d":10,"gl-matrix":11}],5:[function(require,module,exports){
 var vec2 = require("./vector2d");
 
 function Light(x, y, intensity, colour) {
@@ -376,11 +407,11 @@ function Light(x, y, intensity, colour) {
 };
 
 module.exports = Light;
-},{"./vector2d":9}],5:[function(require,module,exports){
+},{"./vector2d":10}],6:[function(require,module,exports){
 var game = require("./game.js");
 
 game.init();
-},{"./game.js":2}],6:[function(require,module,exports){
+},{"./game.js":2}],7:[function(require,module,exports){
 var twgl = window.twgl;
 
 var mat4 = require('gl-matrix').mat4;
@@ -496,9 +527,8 @@ Player.prototype.move = function(dt, keys, level) {
     this.moveX(dt, keys, level);
     this.moveY(dt, keys, level);
 };
-var bob = 0;
+
 Player.prototype.update = function(dt, keys, level) {
-    bob++;
     //If we escape the bounds of the level
     if (this.gamePosition.x < level.windowW * 0.5 - this.size.x * 0.5) {
         this.screenPosition.x = this.gamePosition.x;
@@ -530,7 +560,7 @@ Player.prototype.render = function(level) {
 };
 
 module.exports = Player;
-},{"./aabb":1,"./renderable.js":7,"./vector2d.js":9,"gl-matrix":10}],7:[function(require,module,exports){
+},{"./aabb":1,"./renderable.js":8,"./vector2d.js":10,"gl-matrix":11}],8:[function(require,module,exports){
 var twgl = window.twgl;
 var mat4 = require('gl-matrix').mat4;
 var vec3 = require('gl-matrix').vec3;
@@ -547,6 +577,8 @@ function Renderable(gl, wrapProgram, program, tex) {
     this.program = program;
     this.programWrap = wrapProgram;
     this.gl = gl;
+
+    gl.useProgram(program);
 
     this.attribs = {
         vertices: [],
@@ -633,8 +665,7 @@ Renderable.prototype.initUniforms = function() {
         tex: this.texture,
         u_transform: this.translationMatrix,
         u_mapdimenx: this.mapDimenX,
-        u_mapdimeny: this.mapDimenY,
-        u_customtilepos: this.customtilepos
+        u_mapdimeny: this.mapDimenY
     });
 };
 
@@ -642,6 +673,8 @@ Renderable.prototype.initUniforms = function() {
 Renderable.prototype.initBuffers = function() {
     var vertices = new Float32Array(this.attribs["vertices"]);
     var gl = this.gl;
+
+    gl.useProgram(this.program);
 
     this.vertexBuffer = gl.createBuffer()
 
@@ -652,7 +685,7 @@ Renderable.prototype.initBuffers = function() {
 
 
 module.exports = Renderable;
-},{"gl-matrix":10}],8:[function(require,module,exports){
+},{"gl-matrix":11}],9:[function(require,module,exports){
 var twgl = window.twgl;
 
 var mat4 = require('gl-matrix').mat4;
@@ -668,6 +701,8 @@ function Sprite(gl, wrapProgram, program, tex, x, y, w, h) {
     this.program = program;
     this.programWrap = wrapProgram;
     this.gl = gl;
+
+    gl.useProgram(program);
 
     this.attribs = {
         vertices: new Float32Array([
@@ -752,7 +787,7 @@ Sprite.prototype.initBuffers = function() {
 
 
 module.exports = Sprite;
-},{"./vector2d":9,"gl-matrix":10}],9:[function(require,module,exports){
+},{"./vector2d":10,"gl-matrix":11}],10:[function(require,module,exports){
 function Vector(x, y) {
   this.x = x; this.y = y;
 }
@@ -764,7 +799,7 @@ Vector.prototype.times = function(factor) {
 };
 
 module.exports = Vector;
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 /**
  * @fileoverview gl-matrix - High performance matrix and vector operations
  * @author Brandon Jones
@@ -802,7 +837,7 @@ exports.quat = require("./gl-matrix/quat.js");
 exports.vec2 = require("./gl-matrix/vec2.js");
 exports.vec3 = require("./gl-matrix/vec3.js");
 exports.vec4 = require("./gl-matrix/vec4.js");
-},{"./gl-matrix/common.js":11,"./gl-matrix/mat2.js":12,"./gl-matrix/mat2d.js":13,"./gl-matrix/mat3.js":14,"./gl-matrix/mat4.js":15,"./gl-matrix/quat.js":16,"./gl-matrix/vec2.js":17,"./gl-matrix/vec3.js":18,"./gl-matrix/vec4.js":19}],11:[function(require,module,exports){
+},{"./gl-matrix/common.js":12,"./gl-matrix/mat2.js":13,"./gl-matrix/mat2d.js":14,"./gl-matrix/mat3.js":15,"./gl-matrix/mat4.js":16,"./gl-matrix/quat.js":17,"./gl-matrix/vec2.js":18,"./gl-matrix/vec3.js":19,"./gl-matrix/vec4.js":20}],12:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -856,7 +891,7 @@ glMatrix.toRadian = function(a){
 
 module.exports = glMatrix;
 
-},{}],12:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -1160,7 +1195,7 @@ mat2.LDU = function (L, D, U, a) {
 
 module.exports = mat2;
 
-},{"./common.js":11}],13:[function(require,module,exports){
+},{"./common.js":12}],14:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -1479,7 +1514,7 @@ mat2d.frob = function (a) {
 
 module.exports = mat2d;
 
-},{"./common.js":11}],14:[function(require,module,exports){
+},{"./common.js":12}],15:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -2046,7 +2081,7 @@ mat3.frob = function (a) {
 
 module.exports = mat3;
 
-},{"./common.js":11}],15:[function(require,module,exports){
+},{"./common.js":12}],16:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -3331,7 +3366,7 @@ mat4.frob = function (a) {
 
 module.exports = mat4;
 
-},{"./common.js":11}],16:[function(require,module,exports){
+},{"./common.js":12}],17:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -3886,7 +3921,7 @@ quat.str = function (a) {
 
 module.exports = quat;
 
-},{"./common.js":11,"./mat3.js":14,"./vec3.js":18,"./vec4.js":19}],17:[function(require,module,exports){
+},{"./common.js":12,"./mat3.js":15,"./vec3.js":19,"./vec4.js":20}],18:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -4411,7 +4446,7 @@ vec2.str = function (a) {
 
 module.exports = vec2;
 
-},{"./common.js":11}],18:[function(require,module,exports){
+},{"./common.js":12}],19:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -5122,7 +5157,7 @@ vec3.str = function (a) {
 
 module.exports = vec3;
 
-},{"./common.js":11}],19:[function(require,module,exports){
+},{"./common.js":12}],20:[function(require,module,exports){
 /* Copyright (c) 2015, Brandon Jones, Colin MacKenzie IV.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -5661,4 +5696,4 @@ vec4.str = function (a) {
 
 module.exports = vec4;
 
-},{"./common.js":11}]},{},[5]);
+},{"./common.js":12}]},{},[6]);
